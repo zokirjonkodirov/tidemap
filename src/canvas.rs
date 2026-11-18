@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use egui::{Align2, Color32, FontId, Pos2, Sense, Stroke, StrokeKind, Vec2};
-use mermaidlite_diagram::{EdgeId, Endpoint, ItemId, NodeId, Rect, Scene, StyleSheet};
-use mermaidlite_model::{Camera, RenderArtifact};
+use tidemap_diagram::{EdgeId, Endpoint, ItemId, NodeId, Rect, Scene, StyleSheet};
+use tidemap_model::{Camera, RenderArtifact};
 
 use crate::motion;
 use crate::paint::{self, Emphasis, Lod};

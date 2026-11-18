@@ -3,7 +3,7 @@
 use egui::{Align2, Area, Context, FontId, Id, Order, Pos2, Rect, Sense, Stroke, Ui, vec2};
 
 use crate::{
-    app::{Dialog, MermaidLiteApp},
+    app::{Dialog, TidemapApp},
     icons::{self, Icon},
     theme::{self, Palette, token},
 };
@@ -57,7 +57,7 @@ pub fn pill_pos(canvas: Rect, minimap: Option<Rect>) -> Pos2 {
     Pos2::new(x, bottom)
 }
 
-pub fn show_pill(app: &mut MermaidLiteApp, ctx: &Context, canvas: Rect, p: Palette) {
+pub fn show_pill(app: &mut TidemapApp, ctx: &Context, canvas: Rect, p: Palette) {
     if app.active_file.is_empty() {
         return;
     }
@@ -86,7 +86,7 @@ pub fn show_pill(app: &mut MermaidLiteApp, ctx: &Context, canvas: Rect, p: Palet
 }
 
 fn row(
-    app: &mut MermaidLiteApp,
+    app: &mut TidemapApp,
     ui: &mut Ui,
     p: Palette,
     has_preview: bool,

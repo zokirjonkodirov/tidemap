@@ -1,19 +1,19 @@
 //! Paints a diagram `Scene` with egui primitives and real text.
 //!
-//! Geometry mirrors `mermaidlite_diagram::svg`: outlines come from
+//! Geometry mirrors `tidemap_diagram::svg`: outlines come from
 //! `shape::outline`, details (rims, bars, rings), arrowheads and label pills
 //! are the same, and colours come from the `*_paint` resolvers.
 
 use egui::epaint::PathShape;
 use egui::{Color32, FontFamily, FontId, Mesh, Painter, Pos2, Shape, Stroke, Vec2};
-use mermaidlite_diagram::shape::{self, PathCmd};
-use mermaidlite_diagram::ends;
-use mermaidlite_diagram::svg::{ARROW_LENGTH, end_reach};
-use mermaidlite_diagram::{
+use tidemap_diagram::shape::{self, PathCmd};
+use tidemap_diagram::ends;
+use tidemap_diagram::svg::{ARROW_LENGTH, end_reach};
+use tidemap_diagram::{
     ArrowKind, ClusterItem, EdgeItem, ItemId, LineKind, NodeId, NodeItem, Paint, Rect, Rgba, Scene,
     ShapeKind, StyleSheet, cluster_paint, edge_paint, node_paint,
 };
-use mermaidlite_model::Camera;
+use tidemap_model::Camera;
 
 use crate::theme;
 
@@ -55,7 +55,7 @@ pub fn lod(zoom: f32, font_size: f32, visible_items: usize) -> Lod {
 pub struct Emphasis<'a> {
     pub selected: Option<NodeId>,
     pub strong_nodes: &'a [NodeId],
-    pub strong_edges: &'a [mermaidlite_diagram::EdgeId],
+    pub strong_edges: &'a [tidemap_diagram::EdgeId],
     pub matches: &'a [NodeId],
     /// Progress of the dimming of everything else, 0 (none) to 1 (full).
     pub dim: f32,
@@ -309,7 +309,7 @@ impl Frame<'_> {
             || self.strong_nodes.binary_search(&id.0).is_ok()
     }
 
-    fn edge_strong(&self, id: mermaidlite_diagram::EdgeId) -> bool {
+    fn edge_strong(&self, id: tidemap_diagram::EdgeId) -> bool {
         !self.dimming() || self.strong_edges.binary_search(&id.0).is_ok()
     }
 

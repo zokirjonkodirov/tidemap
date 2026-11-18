@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use directories::ProjectDirs;
 use files::{Resource, eligible, hash, identity, naturally_compare, relative_path, valid_relative};
 use io_worker::Task;
-use mermaidlite_model::*;
+use tidemap_model::*;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     fs,
@@ -53,15 +53,15 @@ pub(crate) enum Internal {
     Rescan,
 }
 
-/// Where preferences, journals and indexes live. `MERMAIDLITE_DATA_DIR` overrides it (dev and
+/// Where preferences, journals and indexes live. `TIDEMAP_DATA_DIR` overrides it (dev and
 /// screenshot runs use this so they never touch the real app data).
 pub fn default_data_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("MERMAIDLITE_DATA_DIR").filter(|dir| !dir.is_empty()) {
+    if let Some(dir) = std::env::var_os("TIDEMAP_DATA_DIR").filter(|dir| !dir.is_empty()) {
         return PathBuf::from(dir);
     }
-    ProjectDirs::from("dev", "MermaidLite", "MermaidLite")
+    ProjectDirs::from("dev", "Tidemap", "Tidemap")
         .map(|directories| directories.data_local_dir().to_owned())
-        .unwrap_or_else(|| std::env::temp_dir().join("MermaidLite-local"))
+        .unwrap_or_else(|| std::env::temp_dir().join("Tidemap-local"))
 }
 
 fn path_key(path: &Path) -> String {
@@ -120,7 +120,7 @@ impl WorkspaceCore {
         let tick_sender = sender.clone();
         let tick_wake = wake.clone();
         std::thread::Builder::new()
-            .name("mermaidlite-reconcile".into())
+            .name("tidemap-reconcile".into())
             .spawn(move || {
                 loop {
                     std::thread::sleep(Duration::from_secs(30));

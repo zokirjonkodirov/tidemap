@@ -4,7 +4,7 @@
 
 **Goal:** Rebuild the application chrome around the canvas: light, soft, Craft-like, with the diagram taking at least 75% of the window and every control in exactly one place.
 
-**Architecture:** Chrome moves out of the 565-line `src/app.rs` into `src/ui/*` modules, one per surface, each a function over `&mut MermaidLiteApp`. Decisions that can be wrong (tokens, contrast, layout mode, tree rows, breadcrumb, palette ranking, status dot) are pure functions with tests; pixels are checked with the screenshot mode from plan 2. Icons are painted vectors, not font glyphs.
+**Architecture:** Chrome moves out of the 565-line `src/app.rs` into `src/ui/*` modules, one per surface, each a function over `&mut TidemapApp`. Decisions that can be wrong (tokens, contrast, layout mode, tree rows, breadcrumb, palette ranking, status dot) are pure functions with tests; pixels are checked with the screenshot mode from plan 2. Icons are painted vectors, not font glyphs.
 
 **Tech Stack:** Rust 1.88, egui/eframe 0.33.3, Inter (OFL) static TTFs.
 
@@ -26,7 +26,7 @@
 - Minimum window 800 × 600. Below 1000 px wide: sidebar auto-collapses and the source panel replaces the canvas instead of sitting beside it.
 - Each control exists once: zoom out, zoom level, zoom in, fit, toggle source, export live only in the floating pill (plus keyboard shortcuts and palette commands).
 - Every existing feature keeps working: open folder/file, recents, pins, history, multi-block Markdown, save, save-copy, autosave, recovery, conflict dialog, external-change handling, export, diagram search, outline, settings.
-- Tests: `cargo test -p mermaidlite`. Visual check after each task: `MERMAIDLITE_SHOT=<scratch>/tN.png target/release/mermaidlite.exe examples/system.mmd` at the default 1440x940, then read the PNG; repeat with `MERMAIDLITE_SHOT_THEME=dark`.
+- Tests: `cargo test -p tidemap`. Visual check after each task: `TIDEMAP_SHOT=<scratch>/tN.png target/release/tidemap.exe examples/system.mmd` at the default 1440x940, then read the PNG; repeat with `TIDEMAP_SHOT_THEME=dark`.
 - Commit steps apply only if the owner chose `git init` in plan 1.
 
 ## Review Focus
@@ -152,11 +152,11 @@ Design: outline style, all geometry inside a 1-unit margin (coordinates 1..15), 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub struct FrameMode { pub sidebar: bool, pub source: SourceMode }
 pub fn frame_mode(window_width: f32, sidebar_open: bool, source_open: bool, has_workspace: bool) -> FrameMode;
 pub fn canvas_fraction(window: egui::Vec2, mode: FrameMode, sidebar_w: f32, source_w: f32) -> f32;   // canvas area / window area
-pub fn frame(app: &mut MermaidLiteApp, ctx: &egui::Context);
+pub fn frame(app: &mut TidemapApp, ctx: &egui::Context);
 // ui/topbar.rs
 pub struct Crumb { pub folder: String, pub file: String, pub block: Option<String>, pub position: Option<(usize, usize)> }
 pub fn crumb(workspace_name: &str, path: &str, blocks: &[(String, String)], active_block: &str) -> Crumb;
-pub fn show(app: &mut MermaidLiteApp, ctx: &egui::Context, p: Palette);
+pub fn show(app: &mut TidemapApp, ctx: &egui::Context, p: Palette);
 ```
 
 Layout: the whole window is `p.app`. Top bar: 40 px, no fill of its own, no border. Left to right: `Sidebar` icon, `Back`, `Forward`, 12 px gap, breadcrumb. Right-aligned: `Info` (with status dot, Task 6), theme toggle (`Sun`/`Moon`), `Settings`. Nothing else: Save, pin and the "⌕ Ctrl P" button leave the bar (save is Ctrl+S and a palette command, shown as state in the info popover; pin moves to the sidebar row context menu and a palette command; search is the sidebar field and Ctrl+P).
@@ -178,7 +178,7 @@ Panels: sidebar and source are `inset_panel` cards with `INSET` (8 px) margin fr
 ```
 
 - [ ] **Step 2:** Run → fail. **Step 3:** Implement; delete `top_bar` and `content` from `app.rs`.
-- [ ] **Step 4:** Run → pass. Screenshot at 1440x940 and at `MERMAIDLITE_SHOT_SIZE=800x600`: bar is one quiet line, right buttons fully visible at 800 wide, no header block above the canvas.
+- [ ] **Step 4:** Run → pass. Screenshot at 1440x940 and at `TIDEMAP_SHOT_SIZE=800x600`: bar is one quiet line, right buttons fully visible at 800 wide, no header block above the canvas.
 - [ ] **Step 5:** Commit.
 
 ---
@@ -195,7 +195,7 @@ pub struct TreeRow { pub path: String, pub name: String, pub depth: usize, pub d
 pub fn build(files: &[FileEntry], query: &str, collapsed: &BTreeSet<String>) -> Vec<TreeRow>;
 pub fn indent(depth: usize) -> f32;      // 16 px per level, capped at 6 levels
 // ui/sidebar.rs
-pub fn show(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette);
+pub fn show(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette);
 ```
 
 `build`: directories before files at each level, each group sorted case-insensitively by name; a non-empty `query` matches case-insensitively against path and diagram titles, keeps all ancestor folders of a match, ignores `collapsed`, and drops folders with no matches; an empty query honours `collapsed`.
@@ -232,8 +232,8 @@ fn names(rows: &[TreeRow]) -> Vec<String> { rows.iter().map(|r| format!("{}{}", 
 ```rust
 pub fn pill_width() -> f32;                                                   // fixed content width of the pill
 pub fn pill_pos(canvas: egui::Rect, minimap: Option<egui::Rect>) -> egui::Pos2; // centre-bottom of the canvas, 16 px up; shifted left to keep an 8 px gap from the minimap; clamped inside the canvas
-pub fn show_pill(app: &mut MermaidLiteApp, ctx: &egui::Context, canvas: egui::Rect, p: Palette);
-pub fn show_source(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette);
+pub fn show_pill(app: &mut TidemapApp, ctx: &egui::Context, canvas: egui::Rect, p: Palette);
+pub fn show_source(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette);
 ```
 
 Pill: `floating(p, RADIUS_PILL)`, height 44, inner padding 6; items: `Minus` · zoom label (56 px wide, 13 px, click → 100%) · `Plus` · 1 px hairline 16 px tall · `Fit` · `Code` (selected state when the source panel is open) · `Export`. All icon buttons from `icons::button`; tooltips carry the shortcut ("Fit · F", "Source · Ctrl+E"). Disabled state when there is no artifact. It is centred on the **canvas** rect, not the window, so it never sits under a panel. No text buttons.
@@ -265,7 +265,7 @@ Source panel: `inset_panel`, on the right, resizable by a 6 px invisible grab st
 #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub enum Dot { None, Unsaved, Attention }
 pub fn dot(dirty: bool, saving: bool, external_change: bool, diagnostics: usize, style_error: bool) -> Dot;
 pub fn save_line(dirty: bool, saving: bool, external_change: bool, read_only: bool) -> &'static str;
-pub fn show(app: &mut MermaidLiteApp, ctx: &egui::Context, anchor: egui::Rect, p: Palette);
+pub fn show(app: &mut TidemapApp, ctx: &egui::Context, anchor: egui::Rect, p: Palette);
 ```
 
 `dot`: `Attention` (danger colour) when `external_change || diagnostics > 0 || style_error`; else `Unsaved` (accent) when `dirty || saving`; else `None`. The dot is 6 px, drawn at the top-right of the `Info` icon.
@@ -308,7 +308,7 @@ pub const COMMANDS: [(Command, &str, &str); 16] = [/* (command, title, shortcut 
 pub enum Hit { File { file_id: String, name: String, path: String }, Diagram { file_id: String, title: String, path: String, index: usize }, Command(Command) }
 pub fn results(query: &str, files: &[FileEntry], pins: &[String], recent: &[String], limit: usize) -> Vec<Hit>;
 pub fn fuzzy_score(query: &str, text: &str) -> Option<i64>;
-pub fn show(app: &mut MermaidLiteApp, ctx: &egui::Context, p: Palette);
+pub fn show(app: &mut TidemapApp, ctx: &egui::Context, p: Palette);
 pub fn single_key_allowed(ctx: &egui::Context) -> bool;   // false while any text field has keyboard focus or a modal is open
 ```
 
@@ -352,7 +352,7 @@ pub fn quiet_button(ui: &mut egui::Ui, text: &str) -> egui::Response;        // 
 Rules: every dialog uses `dialog_frame`, a 12% `ink` scrim, a 20 px semibold title in sentence case, body in 14 px, actions right-aligned with exactly one `primary_button`; destructive choices are `quiet_button` with `danger` text. No separators; sections are spaced 16 px. Settings: groups "Appearance" (theme: Light / Dark / Match system), "Diagram style" (from plan 2 Task 8), "Files" (autosave, include ignored files), "Canvas" (minimap). Export dialog: format segmented control (SVG / PNG), scale (1×, 2×, 3×) for PNG, background toggle, primary "Export".
 
 States (`states.rs`), each centred in the canvas area, title 20 px semibold, one 14 px `secondary` sentence, one action:
-- No workspace: "Open a folder of diagrams" / "MermaidLite reads Markdown and .mmd files and keeps everything on this computer." / primary "Open folder", quiet "Open a file"; below, up to 5 recent workspaces as quiet rows with `Folder` icons.
+- No workspace: "Open a folder of diagrams" / "Tidemap reads Markdown and .mmd files and keeps everything on this computer." / primary "Open folder", quiet "Open a file"; below, up to 5 recent workspaces as quiet rows with `Folder` icons.
 - Workspace, no file selected: "Pick a file to start reading" / "Or press Ctrl+P to search." / none.
 - File without diagrams: "No diagrams in this file yet" / "Add a fenced mermaid block to see it here." / quiet "Open source".
 - Diagram search overlay: `floating` pill at top-centre of the canvas, 300 px field, "{i} of {n}" in `muted`, `Close` icon; "No matches" when empty.
@@ -381,12 +381,12 @@ States (`states.rs`), each centred in the canvas area, title 20 px semibold, one
   - `grep -rnE "corner_radius\(0|CornerRadius::ZERO|\.size\((7|8|9|10|11|12)\.0\)" src`
   - `grep -rnE "\.to_uppercase\(\)" src/ui`
 - [ ] **Step 2: Size matrix.** Screenshot `examples/system.mmd` and `crates/diagram/tests/fixtures/llm_architecture.mmd` at 1440x940, 1100x700, 800x600, in light and dark (12 images). For each, read the PNG and check: diagram readable without zooming; nothing overlaps; pill fully visible; top-bar buttons unclipped.
-- [ ] **Step 3: Scale.** Run with `ctx.set_zoom_factor(2.0)` via a temporary `MERMAIDLITE_SHOT_SCALE=2` env hook at 1440x940; same checks. Keep the env hook (documented in README under development).
+- [ ] **Step 3: Scale.** Run with `ctx.set_zoom_factor(2.0)` via a temporary `TIDEMAP_SHOT_SCALE=2` env hook at 1440x940; same checks. Keep the env hook (documented in README under development).
 - [ ] **Step 4: Done-when from the brief.** Record each result in a short table at the bottom of this file:
   1. Canvas ≥ 75% of the window on open at 1440x940 (from `canvas_fraction` and by measuring the screenshot).
   2. Node label text ≥ 13 px on screen at the opening zoom for both fixtures (zoom × 14 from the pill's zoom label).
   3. No sharp corner, no heavy border (Step 1 greps + screenshots).
-  4. AA contrast (`cargo test -p mermaidlite all_text_pairs_meet_aa` and `cargo test -p mermaidlite-diagram default_palette_matches_spec_and_passes_aa`).
+  4. AA contrast (`cargo test -p tidemap all_text_pairs_meet_aa` and `cargo test -p tidemap-diagram default_palette_matches_spec_and_passes_aa`).
   5. One accent plus the pastel palette (Step 1 colour grep).
 - [ ] **Step 5: Feature regression walk.** In the running app, with a scratch copy of `examples/`: open folder; open file; switch files; Alt+PageDown through `welcome.md`; back/forward; pin and unpin; edit and Ctrl+S; edit and close the window (close dialog appears); edit the file in another editor while dirty (conflict dialog); kill the app while dirty and reopen (recovery dialog); export SVG and PNG; diagram search; outline; theme toggle; restart and confirm the last file, diagram and camera are restored. Note any failure, fix it, repeat that item.
 - [ ] **Step 6:** `cargo test --workspace` green, `cargo build --release` clean, `cargo native package` produces the portable build. Update the docs. Commit.

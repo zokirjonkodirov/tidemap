@@ -1,5 +1,5 @@
 [package]
-name = "mermaidlite-core"
+name = "tidemap-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-mermaidlite-model.workspace = true
+tidemap-model.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

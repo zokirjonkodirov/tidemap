@@ -8,7 +8,7 @@
 //! order, position, route, other) comes from a separate single-threaded run, so its
 //! parts add up to that run's wall time and show where the work is.
 
-use mermaidlite_diagram::{Measurer, Metrics, Par, Scene, Stage, StageTimes, layout, parse};
+use tidemap_diagram::{Measurer, Metrics, Par, Scene, Stage, StageTimes, layout, parse};
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -111,7 +111,7 @@ fn best_of<T>(runs: usize, mut f: impl FnMut() -> T) -> (f64, T) {
 /// position, route and the unattributed remainder (text, setup, packing, bounds).
 fn stage_split(
     runs: usize,
-    parsed: &mermaidlite_diagram::graph::Graph,
+    parsed: &tidemap_diagram::graph::Graph,
     measurer: &Measurer,
     metrics: &Metrics,
     cancel: &AtomicBool,

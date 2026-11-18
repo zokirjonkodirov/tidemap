@@ -1,10 +1,10 @@
 //! The source card: a header with the scope switch and the code editor.
 
 use egui::{Align, Layout, Rect, Sense, Ui, vec2};
-use mermaidlite_model::ViewState;
+use tidemap_model::ViewState;
 
 use crate::{
-    app::MermaidLiteApp,
+    app::TidemapApp,
     icons::{self, Icon},
     theme::{self, Palette, token},
 };
@@ -14,7 +14,7 @@ const SEGMENT_WIDTH: f32 = 72.0;
 const SEGMENT_HEIGHT: f32 = 28.0;
 const TRACK_PAD: f32 = 2.0;
 
-pub fn show_source(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+pub fn show_source(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let (is_markdown_file, read_only) = app
         .buffers
         .get(&app.active_file)
@@ -73,7 +73,7 @@ pub fn show_source(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
     });
 }
 
-fn header(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, is_markdown_file: bool) {
+fn header(app: &mut TidemapApp, ui: &mut Ui, p: Palette, is_markdown_file: bool) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_HEIGHT), Sense::hover());
     let layout = Layout::left_to_right(Align::Center);
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), |ui| {

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tidemap
+Comment=Fast native viewer and editor for Mermaid diagrams
+Exec=tidemap %F
+Icon=tidemap
+Terminal=false
+Categories=Development;Graphics;Utility;
+MimeType=text/markdown;text/vnd.mermaid;

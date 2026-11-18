@@ -6,7 +6,7 @@
 use egui::{
     Color32, Context, CornerRadius, FontFamily, Frame, Margin, RichText, Shadow, Stroke, Visuals, vec2,
 };
-use mermaidlite_model::Theme;
+use tidemap_model::Theme;
 
 /// Single source of truth for spacing, shape, type and motion.
 pub mod token {

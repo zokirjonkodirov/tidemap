@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use mermaidlite_model::FileEntry;
+use tidemap_model::FileEntry;
 
 /// Levels of indentation after which nested folders stop moving to the right.
 const MAX_INDENT_LEVELS: usize = 6;

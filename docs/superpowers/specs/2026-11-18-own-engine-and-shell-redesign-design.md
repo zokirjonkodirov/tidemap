@@ -1,4 +1,4 @@
-# MermaidLite: own diagram engine and shell redesign
+# Tidemap: own diagram engine and shell redesign
 
 Date: 18 November 2026. Status: approved by owner, with the legacy renderer removed.
 Supersedes the diagram and shell parts of `docs/DESIGN.md` and the rendering parts of `docs/ARCHITECTURE.md`. ADR 001 (Rust only, egui) stays in force.

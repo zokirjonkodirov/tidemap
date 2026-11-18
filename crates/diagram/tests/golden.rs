@@ -3,7 +3,7 @@
 //! Every output coordinate is stored as an exact f32 bit pattern, so any change in
 //! layout results (even one ulp) fails. Regenerate with `UPDATE_GOLDEN=1`.
 
-use mermaidlite_diagram::{Graph, Layout, LayoutError, Measurer, Metrics, Par, layout, parse};
+use tidemap_diagram::{Graph, Layout, LayoutError, Measurer, Metrics, Par, layout, parse};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -193,7 +193,7 @@ fn bits(v: f32) -> String {
     format!("{:08x}", v.to_bits())
 }
 
-fn rect_line(tag: &str, i: usize, r: &mermaidlite_diagram::Rect) -> String {
+fn rect_line(tag: &str, i: usize, r: &tidemap_diagram::Rect) -> String {
     format!(
         "{tag} {i} {} {} {} {}",
         bits(r.x),

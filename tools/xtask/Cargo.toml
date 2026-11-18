@@ -1,5 +1,5 @@
 [package]
-name = "mermaidlite-xtask"
+name = "tidemap-xtask"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,4 +8,4 @@ publish = false
 [dependencies]
 serde_json.workspace = true
 sha2.workspace = true
-mermaidlite-diagram.workspace = true
+tidemap-diagram.workspace = true

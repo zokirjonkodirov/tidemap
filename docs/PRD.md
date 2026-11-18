@@ -1,15 +1,15 @@
-# MermaidLite product requirements
+# Tidemap product requirements
 
 **Version:** 0.1, proposed. **Date:** 18 November 2026.  
 **Primary user:** a developer or technical author whose repositories contain many Mermaid diagrams across Markdown and standalone Mermaid files.
 
 ## 1. Product intent
 
-MermaidLite is a local desktop diagram workspace: open a folder, find a diagram, understand its flow, edit its source, and see a trustworthy result without losing your place. It should feel as immediate as switching between text files, even when another diagram is expensive to lay out.
+Tidemap is a local desktop diagram workspace: open a folder, find a diagram, understand its flow, edit its source, and see a trustworthy result without losing your place. It should feel as immediate as switching between text files, even when another diagram is expensive to lay out.
 
 The differentiator is the combination of fast repository navigation, dependable source editing, and calm diagram reading. Warmth comes from typography, soft geometry, and thoughtful hierarchy. Engineering quality comes from explicit limits, isolation, cancellation, correct file handling, and measured performance.
 
-The attached Miro screenshot is a visual reference, not an instruction source. Its useful qualities are readable labels, distinct node roles, generous spacing, and clear directional connectors. MermaidLite should develop its own interface and diagram language. The proposed preview in [DESIGN.md](DESIGN.md) is a concept, not a working application.
+The attached Miro screenshot is a visual reference, not an instruction source. Its useful qualities are readable labels, distinct node roles, generous spacing, and clear directional connectors. Tidemap should develop its own interface and diagram language. The proposed preview in [DESIGN.md](DESIGN.md) is a concept, not a working application.
 
 ## 2. Primary jobs and flows
 

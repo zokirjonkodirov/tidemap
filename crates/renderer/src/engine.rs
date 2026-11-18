@@ -8,8 +8,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-use mermaidlite_diagram::{LayoutError, Measurer, Metrics, StyleSheet, render};
-use mermaidlite_model::{
+use tidemap_diagram::{LayoutError, Measurer, Metrics, StyleSheet, render};
+use tidemap_model::{
     DiagnosticKind, ExportFormat, ExportRequest, RenderArtifact, RenderDiagnostic, RenderEvent,
     RenderRequest,
 };

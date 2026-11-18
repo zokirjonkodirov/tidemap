@@ -3,12 +3,12 @@
 use egui::{
     Align2, Area, Color32, Context, FontId, Id, Margin, Order, Painter, Rect, RichText, Sense, Ui, UiBuilder, pos2, vec2,
 };
-use mermaidlite_diagram::Span;
-use mermaidlite_model::DiagnosticKind;
+use tidemap_diagram::Span;
+use tidemap_model::DiagnosticKind;
 
 use super::controls::{primary_button, quiet_button};
 use crate::{
-    app::{Dialog, MermaidLiteApp},
+    app::{Dialog, TidemapApp},
     icons::{self, Icon},
     motion,
     theme::{self, Palette, token},
@@ -57,7 +57,7 @@ pub fn save_line(dirty: bool, saving: bool, external_change: bool, read_only: bo
 }
 
 /// The dot for the active file, as the top bar needs it.
-pub fn status(app: &MermaidLiteApp) -> Dot {
+pub fn status(app: &TidemapApp) -> Dot {
     let buffer = app.buffers.get(&app.active_file);
     dot(
         buffer.is_some_and(|buffer| buffer.dirty()),
@@ -118,7 +118,7 @@ struct Facts {
     details: Option<String>,
 }
 
-fn facts(app: &MermaidLiteApp) -> Facts {
+fn facts(app: &TidemapApp) -> Facts {
     let buffer = app.buffers.get(&app.active_file);
     let dirty = buffer.is_some_and(|buffer| buffer.dirty());
     let saving = buffer.is_some_and(|buffer| buffer.saving.is_some());
@@ -310,7 +310,7 @@ fn contents(ui: &mut Ui, p: Palette, facts: &Facts, actions: &mut Actions) {
     });
 }
 
-fn apply(app: &mut MermaidLiteApp, actions: Actions) {
+fn apply(app: &mut TidemapApp, actions: Actions) {
     let id = app.active_file.clone();
     if actions.save {
         app.save(id.clone(), false);
@@ -347,7 +347,7 @@ fn apply(app: &mut MermaidLiteApp, actions: Actions) {
 }
 
 /// The popover under the Info button. `anchor` is that button's rectangle.
-pub fn show(app: &mut MermaidLiteApp, ctx: &Context, anchor: Rect, p: Palette) {
+pub fn show(app: &mut TidemapApp, ctx: &Context, anchor: Rect, p: Palette) {
     let appear_id = Id::new("info-popover-appear");
     if !app.info_open || app.dialog.is_some() || app.palette_open {
         motion::restart(ctx, appear_id);
@@ -386,7 +386,7 @@ pub fn show(app: &mut MermaidLiteApp, ctx: &Context, anchor: Rect, p: Palette) {
 
 /// The toast for one-off results, at the bottom-left of the canvas. It rises in, and fades
 /// out over the last part of its life instead of vanishing.
-pub fn toast(app: &MermaidLiteApp, ctx: &Context, canvas: Rect, p: Palette) {
+pub fn toast(app: &TidemapApp, ctx: &Context, canvas: Rect, p: Palette) {
     let Some((text, shown)) = &app.toast else {
         return;
     };

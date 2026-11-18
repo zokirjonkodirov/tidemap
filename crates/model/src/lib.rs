@@ -205,7 +205,7 @@ pub struct RenderArtifact {
     pub diagram_id: String,
     pub revision: u64,
     pub source_hash: String,
-    pub rendered: mermaidlite_diagram::Rendered,
+    pub rendered: tidemap_diagram::Rendered,
     pub layout_key: u64,
     pub bytes: usize,
     pub duration_us: u64,

@@ -9,11 +9,11 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use egui::{Context, EventFilter, FontId, Id, Key, Modifiers, Rect, Sense, Ui, UiBuilder, text::LayoutJob, vec2};
-use mermaidlite_model::FileEntry;
+use tidemap_model::FileEntry;
 
 use super::tree::{self, TreeCache, TreeRow};
 use crate::{
-    app::MermaidLiteApp,
+    app::TidemapApp,
     icons::{self, Icon},
     motion,
     theme::{self, Palette, token},
@@ -93,7 +93,7 @@ struct Fold {
     start: f64,
 }
 
-pub fn show(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+pub fn show(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let ctx = ui.ctx().clone();
     let rows = cached_rows(app);
     let mut actions = Actions::default();
@@ -145,11 +145,11 @@ pub fn show(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
 
 /// Rebuilds the rows only when the workspace, the filter or the folding changed.
 /// The folded folders that apply now: the search results fold on their own.
-fn folded(app: &MermaidLiteApp) -> &BTreeSet<String> {
+fn folded(app: &TidemapApp) -> &BTreeSet<String> {
     if app.tree_query.trim().is_empty() { &app.collapsed } else { &app.search_collapsed }
 }
 
-fn cached_rows(app: &mut MermaidLiteApp) -> Arc<Vec<TreeRow>> {
+fn cached_rows(app: &mut TidemapApp) -> Arc<Vec<TreeRow>> {
     let fresh = app.tree_cache.as_ref().is_some_and(|cache| {
         cache.revision == app.workspace_revision && cache.query == app.tree_query && cache.collapsed == *folded(app)
     });
@@ -173,12 +173,12 @@ fn cached_rows(app: &mut MermaidLiteApp) -> Arc<Vec<TreeRow>> {
     rows
 }
 
-fn cursor_index(app: &MermaidLiteApp, rows: &[TreeRow]) -> Option<usize> {
+fn cursor_index(app: &TidemapApp, rows: &[TreeRow]) -> Option<usize> {
     let cursor = app.tree_cursor.as_ref()?;
     rows.iter().position(|row| &row.path == cursor)
 }
 
-fn active_row(app: &MermaidLiteApp, rows: &[TreeRow]) -> Option<usize> {
+fn active_row(app: &TidemapApp, rows: &[TreeRow]) -> Option<usize> {
     rows.iter().position(|row| row.file_id.as_ref() == Some(&app.active_file))
 }
 
@@ -187,7 +187,7 @@ fn active_row(app: &MermaidLiteApp, rows: &[TreeRow]) -> Option<usize> {
 // ---------------------------------------------------------------------------
 
 fn keyboard(
-    app: &mut MermaidLiteApp,
+    app: &mut TidemapApp,
     ctx: &Context,
     rows: &[TreeRow],
     search_focused: bool,
@@ -319,7 +319,7 @@ fn keyboard(
     }
 }
 
-fn apply(app: &mut MermaidLiteApp, ctx: &Context, actions: Actions) {
+fn apply(app: &mut TidemapApp, ctx: &Context, actions: Actions) {
     if let Some(path) = actions.toggle {
         let searching = !app.tree_query.trim().is_empty();
         let set = if searching { &mut app.search_collapsed } else { &mut app.collapsed };
@@ -385,7 +385,7 @@ fn reveal(path: &std::path::Path) {
 // Header: the project switcher
 // ---------------------------------------------------------------------------
 
-fn header(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn header(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let name = app.workspace.as_ref().map(|workspace| workspace.name.clone()).unwrap_or_default();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_HEIGHT), Sense::click());
     let open = app.palette_open && app.palette_mode == super::palette::PaletteMode::Projects;
@@ -418,7 +418,7 @@ fn header(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
 // Search
 // ---------------------------------------------------------------------------
 
-fn search_field(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) {
+fn search_field(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
     let id = Id::new(SEARCH_ID);
     // The whole field is the target, not only the text: a click on the icon or the padding focuses it.
     let (rect, field) = ui.allocate_exact_size(vec2(ui.available_width(), SEARCH_HEIGHT), Sense::click());
@@ -512,7 +512,7 @@ struct Display {
     animating: bool,
 }
 
-fn display(app: &MermaidLiteApp, ctx: &Context, rows: &Arc<Vec<TreeRow>>) -> Display {
+fn display(app: &TidemapApp, ctx: &Context, rows: &Arc<Vec<TreeRow>>) -> Display {
     let plain = || Display { rows: Arc::clone(rows), reveal: Vec::new(), animating: false };
     let now = ctx.input(|input| input.time);
     let fold: Option<Fold> = ctx.data(|data| data.get_temp(Id::new(FOLD_ANIM)));
@@ -543,7 +543,7 @@ fn display(app: &MermaidLiteApp, ctx: &Context, rows: &Arc<Vec<TreeRow>>) -> Dis
     Display { rows: shown, reveal, animating: true }
 }
 
-fn list(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, rows: &Arc<Vec<TreeRow>>, actions: &mut Actions) {
+fn list(app: &mut TidemapApp, ui: &mut Ui, p: Palette, rows: &Arc<Vec<TreeRow>>, actions: &mut Actions) {
     let indexing = app.workspace.as_ref().is_some_and(|workspace| workspace.indexing);
     let searching = !app.tree_query.trim().is_empty();
 
@@ -655,7 +655,7 @@ fn list(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, rows: &Arc<Vec<TreeRo
 }
 
 /// When a different file becomes active, brings its row into view if it is outside.
-fn scroll_to_active(app: &MermaidLiteApp, ui: &mut Ui, rows: &[TreeRow], first_visible: usize, visible: usize) {
+fn scroll_to_active(app: &TidemapApp, ui: &mut Ui, rows: &[TreeRow], first_visible: usize, visible: usize) {
     let marker = egui::Id::new("tree-scrolled-to");
     let last: Option<String> = ui.data(|data| data.get_temp(marker));
     if last.as_deref() == Some(app.active_file.as_str()) {
@@ -677,7 +677,7 @@ fn scroll_to_active(app: &MermaidLiteApp, ui: &mut Ui, rows: &[TreeRow], first_v
     ui.scroll_to_rect(rect, Some(egui::Align::Center));
 }
 
-fn pinned_files(app: &MermaidLiteApp) -> Vec<FileEntry> {
+fn pinned_files(app: &TidemapApp) -> Vec<FileEntry> {
     let Some(workspace) = &app.workspace else {
         return Vec::new();
     };
@@ -689,7 +689,7 @@ fn pinned_files(app: &MermaidLiteApp) -> Vec<FileEntry> {
         .collect()
 }
 
-fn empty_state(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, indexing: bool, searching: bool) {
+fn empty_state(app: &mut TidemapApp, ui: &mut Ui, p: Palette, indexing: bool, searching: bool) {
     ui.add_space(token::SPACE[1]);
     let message = if indexing {
         "Looking for diagrams\u{2026}".to_owned()
@@ -713,7 +713,7 @@ fn empty_state(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, indexing: bool
 /// folder folds or unfolds, `look.reveal` shrinks the row's height and fades it; the content keeps
 /// its place and is clipped, so rows slide away rather than squash.
 fn file_or_folder_row(
-    app: &MermaidLiteApp,
+    app: &TidemapApp,
     ui: &mut Ui,
     p: Palette,
     row: &TreeRow,
@@ -884,7 +884,7 @@ fn file_or_folder_row(
 // ---------------------------------------------------------------------------
 
 /// Three separate actions, each with its own glyph: a new diagram, an existing file, a folder.
-fn footer_row(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn footer_row(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
         if icons::button(ui, Icon::FolderOpen, "Open folder · Ctrl+Shift+O", false, true).clicked() {
@@ -919,7 +919,7 @@ fn footer_row(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
     });
 }
 
-impl MermaidLiteApp {
+impl TidemapApp {
     /// Creates `untitled.mmd` (or the next free name) in the project and opens it with the source
     /// pane showing, as soon as the index has picked it up.
     pub(crate) fn new_diagram(&mut self) {

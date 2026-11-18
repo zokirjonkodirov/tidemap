@@ -1,11 +1,11 @@
 //! The slim top bar: navigation on the left, the breadcrumb, quiet actions on the right.
 
 use egui::{Align, Color32, Context, FontId, Layout, Sense, UiBuilder, vec2};
-use mermaidlite_model::Theme;
+use tidemap_model::Theme;
 
 use super::info;
 use crate::{
-    app::MermaidLiteApp,
+    app::TidemapApp,
     icons::{self, Icon},
     motion,
     theme::{self, Palette, token},
@@ -93,7 +93,7 @@ struct Open {
     blocks: Vec<(String, String)>,
 }
 
-fn open_file(app: &MermaidLiteApp) -> Option<Open> {
+fn open_file(app: &TidemapApp) -> Option<Open> {
     let buffer = app.buffers.get(&app.active_file)?;
     let blocks: Vec<(String, String)> = buffer
         .document
@@ -113,7 +113,7 @@ fn open_file(app: &MermaidLiteApp) -> Option<Open> {
     })
 }
 
-pub fn show(app: &mut MermaidLiteApp, ctx: &Context, p: Palette) {
+pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) {
     let narrow_ok = ctx.content_rect().width() >= token::NARROW;
     egui::TopBottomPanel::top("topbar")
         .exact_height(token::BAR_HEIGHT)
@@ -133,7 +133,7 @@ pub fn show(app: &mut MermaidLiteApp, ctx: &Context, p: Palette) {
         });
 }
 
-fn left_side(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette, sidebar_fits: bool) {
+fn left_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, sidebar_fits: bool) {
     ui.spacing_mut().item_spacing.x = 4.0;
     let open = open_file(app);
     let has_workspace = app.workspace.is_some();
@@ -174,7 +174,7 @@ fn left_side(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette, sidebar_fi
 }
 
 /// The project name as a quiet button that opens the project switcher.
-fn project_crumb(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette) {
+fn project_crumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     let name = app.workspace.as_ref().map(|workspace| workspace.name.clone()).unwrap_or_default();
     let font = FontId::new(token::FONT_SMALL, theme::font_medium());
     let shown = fit_text(&|text: &str| ui.painter().layout_no_wrap(text.to_owned(), font.clone(), Color32::WHITE).size().x, &name, 180.0, false);
@@ -198,7 +198,7 @@ fn project_crumb(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette) {
     }
 }
 
-fn breadcrumb(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette, open: &Open, budget: f32) {
+fn breadcrumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, open: &Open, budget: f32) {
     let small = FontId::proportional(token::FONT_SMALL);
     let name_font = FontId::new(token::FONT_SMALL, theme::font_medium());
     let painter = ui.painter().clone();
@@ -248,7 +248,7 @@ fn breadcrumb(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette, open: &Op
 
 /// The quiet button that names the active diagram and opens the list of the file's diagrams.
 fn block_button(
-    app: &mut MermaidLiteApp,
+    app: &mut TidemapApp,
     ui: &mut egui::Ui,
     p: Palette,
     open: &Open,
@@ -292,7 +292,7 @@ fn block_button(
     }
 }
 
-fn right_side(app: &mut MermaidLiteApp, ui: &mut egui::Ui, p: Palette) {
+fn right_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     ui.spacing_mut().item_spacing.x = 4.0;
     if icons::button(ui, Icon::Settings, "Settings · Ctrl+,", false, true).clicked() {
         app.dialog = Some(crate::app::Dialog::Settings);

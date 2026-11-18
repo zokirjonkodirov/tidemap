@@ -1,8 +1,8 @@
-# MermaidLite
+# Tidemap
 
 Fast, native desktop viewer and editor for Mermaid diagrams in local Markdown and `.mmd` files.
 
-Pure Rust: egui UI, in-house diagram engine. No Electron, WebView, JavaScript or browser. Single ~20 MB exe, fully offline.
+Pure Rust: egui UI, in-house diagram engine. No Electron, WebView, JavaScript or browser. Single ~20 MB binary, fully offline. Windows, macOS, Linux.
 
 | Light | Dark |
 |---|---|
@@ -24,9 +24,15 @@ Pure Rust: egui UI, in-house diagram engine. No Electron, WebView, JavaScript or
 
 ## Install
 
-Download the zip from [Releases](../../releases), unzip, run `MermaidLite.exe`. Windows x86_64.
+Grab the archive for your platform from [Releases](../../releases) and verify it with the matching `.sha256` file.
 
-Verify: `sha256sum -c MermaidLite-0.2.0-x86_64-pc-windows-gnu.zip.sha256`.
+| Platform | Archive | Run |
+|---|---|---|
+| Windows x86_64 | `.zip` | unzip, run `Tidemap.exe` |
+| macOS Apple Silicon / Intel | `.tar.gz` | extract, `./tidemap`; unsigned, so first run: right-click → Open (or `xattr -d com.apple.quarantine tidemap`) |
+| Linux x86_64 | `.tar.gz` | extract, `./tidemap`; needs GTK 3 for file dialogs; `tidemap.desktop` + `tidemap.png` included for a launcher |
+
+Release archives for all platforms are built by GitHub Actions on every `v*` tag.
 
 ## Benchmarks
 
@@ -60,7 +66,9 @@ cargo native package   portable zip in release/
 cargo native bench     engine timings
 ```
 
-Windows uses the GNU toolchain; no Visual Studio needed (details in [docs/BUILD_REPORT.md](docs/BUILD_REPORT.md)).
+- Windows: GNU or MSVC toolchain (GNU needs no Visual Studio; see [docs/BUILD_REPORT.md](docs/BUILD_REPORT.md)).
+- macOS: nothing extra.
+- Linux: `sudo apt install libgtk-3-dev libxkbcommon-dev libwayland-dev libx11-dev` (or distro equivalent).
 
 ## Mermaid support
 
@@ -71,7 +79,7 @@ Windows uses the GNU toolchain; no Visual Studio needed (details in [docs/BUILD_
 
 ## Dev hooks
 
-`MERMAIDLITE_SHOT=<png>` renders a screenshot headlessly (plus `_SIZE`, `_THEME=dark`, `_SELECT`, `_SOURCE`, `_FOLDER`, `_OUTLINE`, `_DIALOG`); `MERMAIDLITE_EXPORT=<svg|png>` exports from CLI. Screenshots above were made this way.
+`TIDEMAP_SHOT=<png>` renders a screenshot headlessly (plus `_SIZE`, `_THEME=dark`, `_SELECT`, `_SOURCE`, `_FOLDER`, `_OUTLINE`, `_DIALOG`); `TIDEMAP_EXPORT=<svg|png>` exports from CLI. Screenshots above were made this way.
 
 ## Layout
 

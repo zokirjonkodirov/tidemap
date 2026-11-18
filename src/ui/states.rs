@@ -10,7 +10,7 @@ use super::{
     palette::elided,
 };
 use crate::{
-    app::MermaidLiteApp,
+    app::TidemapApp,
     icons::{self, Icon},
     theme::{self, Palette, token},
 };
@@ -76,7 +76,7 @@ fn list_row(ui: &mut Ui, p: Palette, icon: Icon, name: &str, detail: &str) -> eg
 }
 
 /// No workspace and no file: invite the user to open a folder.
-pub fn welcome(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+pub fn welcome(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let recents: Vec<_> = app.recents.iter().take(RECENT_LIMIT).cloned().collect();
     let recoveries: Vec<(String, String, String)> = app
         .recoveries
@@ -96,7 +96,7 @@ pub fn welcome(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
             ui,
             p,
             "Open a folder of diagrams",
-            "MermaidLite reads Markdown and .mmd files and keeps everything on this computer.",
+            "Tidemap reads Markdown and .mmd files and keeps everything on this computer.",
         );
         ui.add_space(token::SPACE[4]);
         ui.spacing_mut().item_spacing.y = token::SPACE[0];
@@ -144,7 +144,7 @@ fn section_label(ui: &mut Ui, p: Palette, text: &str) {
 }
 
 /// A workspace is open but no file is selected.
-pub fn idle(app: &MermaidLiteApp, ui: &mut Ui, p: Palette) {
+pub fn idle(app: &TidemapApp, ui: &mut Ui, p: Palette) {
     let indexing = app.workspace.as_ref().is_some_and(|workspace| workspace.indexing);
     column(ui, 0.3, |ui| {
         if indexing {
@@ -156,7 +156,7 @@ pub fn idle(app: &MermaidLiteApp, ui: &mut Ui, p: Palette) {
 }
 
 /// The open file has no Mermaid block.
-pub fn no_diagrams(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+pub fn no_diagrams(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let mut open_source = false;
     let source_open = app.editor_open;
     column(ui, 0.3, |ui| {
@@ -172,7 +172,7 @@ pub fn no_diagrams(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
 }
 
 /// The find-in-diagram pill at the top centre of the canvas.
-pub fn search_overlay(app: &mut MermaidLiteApp, ctx: &Context, canvas: Rect, p: Palette) {
+pub fn search_overlay(app: &mut TidemapApp, ctx: &Context, canvas: Rect, p: Palette) {
     if !app.search_open || app.active_file.is_empty() {
         return;
     }
@@ -234,7 +234,7 @@ pub fn search_overlay(app: &mut MermaidLiteApp, ctx: &Context, canvas: Rect, p: 
 }
 
 /// The outline: every node of the diagram as a row; choosing one finds it on the canvas.
-pub fn outline(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+pub fn outline(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let mut close = false;
     egui::containers::Sides::new().show(
         ui,

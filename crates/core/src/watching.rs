@@ -1,5 +1,5 @@
 use crate::Internal;
-use mermaidlite_model::ChangeKind;
+use tidemap_model::ChangeKind;
 use notify::{
     Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
     event::{ModifyKind, RenameMode},
@@ -34,7 +34,7 @@ impl Watching {
         let stop = Arc::new(AtomicBool::new(false));
         let stopped = stop.clone();
         std::thread::Builder::new()
-            .name("mermaidlite-watch".into())
+            .name("tidemap-watch".into())
             .spawn(move || {
                 let mut pending = BTreeMap::<PathBuf, ChangeKind>::new();
                 let mut since = Instant::now();
@@ -54,7 +54,7 @@ impl Watching {
                             }
                             for (index, path) in event.paths.into_iter().enumerate() {
                                 let name = path.file_name().unwrap_or_default().to_string_lossy();
-                                if (name.starts_with(".mermaidlite-") && name.ends_with(".tmp"))
+                                if (name.starts_with(".tidemap-") && name.ends_with(".tmp"))
                                     || path.components().any(|component| {
                                         component.as_os_str().eq_ignore_ascii_case(".git")
                                     })

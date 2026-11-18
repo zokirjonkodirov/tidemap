@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 use egui::{
     Align2, Context, FontId, Id, Key, Margin, Modifiers, Rect, RichText, Sense, Ui, text::LayoutJob, vec2,
 };
-use mermaidlite_model::{FileEntry, RecentWorkspace};
+use tidemap_model::{FileEntry, RecentWorkspace};
 
 use super::controls::key_cap;
 use crate::{
-    app::MermaidLiteApp,
+    app::TidemapApp,
     icons::{self, Icon},
     motion,
     theme::{self, Palette, token},
@@ -363,7 +363,7 @@ fn single_keys() -> [(Key, Command); 10] {
 }
 
 /// Handles the keyboard for one frame: chords, the single keys and the Esc cascade.
-pub fn shortcuts(app: &mut MermaidLiteApp, ctx: &Context) {
+pub fn shortcuts(app: &mut TidemapApp, ctx: &Context) {
     let modal = app.palette_open
         || app.dialog.is_some()
         || app.recovery_file.is_some()
@@ -416,7 +416,7 @@ pub fn shortcuts(app: &mut MermaidLiteApp, ctx: &Context) {
 
 /// Esc closes one thing per press: palette, dialog, info popover, diagram search, selection.
 /// Returns true when it did. The sidebar handles its own Esc while it has the keyboard.
-fn escape(app: &mut MermaidLiteApp, ctx: &Context) -> bool {
+fn escape(app: &mut TidemapApp, ctx: &Context) -> bool {
     if app.sidebar_focused && !app.palette_open && app.dialog.is_none() {
         return false;
     }
@@ -454,7 +454,7 @@ fn escape(app: &mut MermaidLiteApp, ctx: &Context) -> bool {
 // ---------------------------------------------------------------------------
 
 /// The rows for the palette as it is now.
-fn current_results(app: &MermaidLiteApp) -> Vec<Hit> {
+fn current_results(app: &TidemapApp) -> Vec<Hit> {
     if app.palette_mode == PaletteMode::Projects {
         let current = app.workspace.as_ref().map(|workspace| workspace.root.as_path());
         return project_results(&app.palette_query, &app.recents, current);
@@ -471,7 +471,7 @@ fn current_results(app: &MermaidLiteApp) -> Vec<Hit> {
 const APPEAR_ID: &str = "palette-appear";
 const HIGHLIGHT_ID: &str = "palette-highlight";
 
-pub fn show(app: &mut MermaidLiteApp, ctx: &Context, p: Palette) {
+pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) {
     if !app.palette_open {
         // Closed: forget the entrance so the next opening animates again.
         motion::restart(ctx, Id::new(APPEAR_ID));
@@ -507,7 +507,7 @@ pub fn show(app: &mut MermaidLiteApp, ctx: &Context, p: Palette) {
     }
 }
 
-fn contents(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) -> Option<Hit> {
+fn contents(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> Option<Hit> {
     // Keys are taken before the text field sees them (it would move its cursor instead).
     let empty_query = app.palette_query.is_empty();
     let (down, up, page_down, page_up, enter, delete, back) = ctx.input_mut(|input| {
@@ -579,7 +579,7 @@ fn contents(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) ->
 }
 
 /// A quiet strip of key hints under the list.
-fn footer(app: &MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn footer(app: &TidemapApp, ui: &mut Ui, p: Palette) {
     let hints: &[(&str, &str)] = match app.palette_mode {
         PaletteMode::Projects => &[("Enter", "open"), ("Del", "remove from list"), ("Backspace", "files")],
         PaletteMode::Files if app.palette_query.starts_with('>') => &[("Enter", "run"), ("Esc", "close")],
@@ -602,7 +602,7 @@ fn footer(app: &MermaidLiteApp, ui: &mut Ui, p: Palette) {
     }
 }
 
-fn empty_message(app: &MermaidLiteApp) -> String {
+fn empty_message(app: &TidemapApp) -> String {
     let query = app.palette_query.trim();
     if app.palette_mode == PaletteMode::Projects {
         return if query.is_empty() {
@@ -621,7 +621,7 @@ fn empty_message(app: &MermaidLiteApp) -> String {
 }
 
 /// The search icon and the text field. Returns true when the text changed.
-fn input_row(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) -> bool {
+fn input_row(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> bool {
     let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), INPUT_HEIGHT), Sense::hover());
     let icon = Rect::from_center_size(egui::pos2(row.left() + 16.0 + 8.0, row.center().y), vec2(16.0, 16.0));
     let (glyph, placeholder) = match app.palette_mode {
@@ -655,7 +655,7 @@ fn input_row(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) -
 
 /// The scrolling list. Returns the hit that was clicked. The selection highlight glides
 /// between rows instead of jumping.
-fn result_list(app: &MermaidLiteApp, ui: &mut Ui, p: Palette, hits: &[Hit], keyboard: bool) -> Option<Hit> {
+fn result_list(app: &TidemapApp, ui: &mut Ui, p: Palette, hits: &[Hit], keyboard: bool) -> Option<Hit> {
     let mut chosen = None;
     let height = ROW_HEIGHT * hits.len().min(VISIBLE_ROWS) as f32;
     let ctx = ui.ctx().clone();
@@ -754,7 +754,7 @@ fn tail_that_fits(ui: &Ui, text: &str, font: &FontId, budget: f32) -> String {
     "\u{2026}".to_owned()
 }
 
-impl MermaidLiteApp {
+impl TidemapApp {
     /// Opens the file, diagram or command a palette row stands for.
     pub(crate) fn open_hit(&mut self, hit: Hit) {
         match hit {

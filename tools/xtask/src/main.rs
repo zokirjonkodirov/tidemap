@@ -98,7 +98,7 @@ fn execute() -> Result<()> {
         "--release",
         "--locked",
         "-p",
-        "mermaidlite",
+        "tidemap",
     ]);
     if action == "run" && args.len() > 1 {
         build.arg("--").args(&args[1..]);
@@ -128,14 +128,14 @@ fn package(
 ) -> Result<()> {
     let windows = host.contains("windows");
     let executable_name = if windows {
-        "MermaidLite.exe"
+        "Tidemap.exe"
     } else {
-        "mermaidlite"
+        "tidemap"
     };
     let compiled_name = if windows {
-        "mermaidlite.exe"
+        "tidemap.exe"
     } else {
-        "mermaidlite"
+        "tidemap"
     };
     let executable = fs::read(root.join("target/release").join(compiled_name))?;
     let imports = if windows {
@@ -143,7 +143,7 @@ fn package(
     } else {
         BTreeSet::new()
     };
-    let folder_name = format!("MermaidLite-0.2.0-{host}");
+    let folder_name = format!("Tidemap-0.2.0-{host}");
     let directory = root.join("release").join(&folder_name);
     fs::create_dir_all(&directory)?;
     let mut files = vec![(executable_name.to_owned(), executable)];
@@ -198,8 +198,8 @@ fn package(
     ));
     let artifacts: Vec<_> = files.iter().map(|(path, bytes)| serde_json::json!({"path":path,"bytes":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes))})).collect();
     files.push(("build-manifest.json".to_owned(), serde_json::to_vec_pretty(&serde_json::json!({
-        "version":"0.2.0", "target":host, "language":"Rust", "ui":"native egui", "renderer":"mermaid-rs-renderer 0.3.1",
-        "validation":"Compilation and packaging only. No tests run; application not launched.",
+        "version":"0.2.0", "target":host, "language":"Rust", "ui":"native egui", "renderer":"in-house diagram engine",
+        "validation":"Compilation and packaging only.",
         "signed":false, "artifacts":artifacts,
     }))?));
     for (name, bytes) in &files {
@@ -216,6 +216,37 @@ fn package(
             directory.join(executable_name),
             fs::Permissions::from_mode(0o755),
         )?;
+    }
+    if !windows {
+        // Unix archives keep the executable bit, which the STORE zip writer cannot.
+        for (name, source) in [
+            ("tidemap.desktop", "packaging/linux/tidemap.desktop"),
+            ("tidemap.png", "assets/icon.png"),
+        ] {
+            if host.contains("linux") {
+                fs::copy(root.join(source), directory.join(name))?;
+            }
+        }
+        let tarball = root.join("release").join(format!("{folder_name}.tar.gz"));
+        let status = Command::new("tar")
+            .current_dir(root.join("release"))
+            .arg("-czf")
+            .arg(&tarball)
+            .arg(&folder_name)
+            .status()?;
+        if !status.success() {
+            return Err("tar failed".into());
+        }
+        fs::write(
+            root.join("release").join(format!("{folder_name}.tar.gz.sha256")),
+            format!(
+                "{:x}  {folder_name}.tar.gz
+",
+                Sha256::digest(fs::read(&tarball)?)
+            ),
+        )?;
+        println!("Portable archive: {}", tarball.display());
+        return Ok(());
     }
     let zip_path = root.join("release").join(format!("{folder_name}.zip"));
     let archive_files: Vec<_> = files
@@ -265,7 +296,7 @@ fn license_inventory(
         .ok_or("Missing Cargo packages")?;
     let app = packages
         .iter()
-        .find(|package| package["name"] == "mermaidlite")
+        .find(|package| package["name"] == "tidemap")
         .and_then(|package| package["id"].as_str())
         .ok_or("Missing native application package")?;
     let nodes: BTreeMap<_, _> = metadata["resolve"]["nodes"]

@@ -1,6 +1,6 @@
 //! CommonMark extraction and reversible, UTF-8-byte source maps.
 use anyhow::{Result, bail};
-use mermaidlite_model::{DiagramBlock, SourceLine};
+use tidemap_model::{DiagramBlock, SourceLine};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use sha2::{Digest, Sha256};
 use std::{

@@ -5,7 +5,7 @@ use crate::{
     store::{EDIT_LIMIT, Store, atomic_write},
 };
 use ignore::WalkBuilder;
-use mermaidlite_model::FileEntry;
+use tidemap_model::FileEntry;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -55,7 +55,7 @@ pub(crate) fn spawn(
     store: Arc<Store>,
 ) -> std::io::Result<()> {
     std::thread::Builder::new()
-        .name("mermaidlite-index".into())
+        .name("tidemap-index".into())
         .spawn(move || {
             let send = |event: Internal| {
                 let _ = sender.send(event);

@@ -97,7 +97,7 @@ Tools that exist instead:
 - `crates/diagram/examples/render.rs`: scene to the final SVG. Flags `--dark`, `--by-subgraph`, `--embed-fonts`, `--contrast`.
 - `cargo native bench`: times parse, layout and scene build on synthetic graphs.
 - Sample inputs in `crates/diagram/tests/fixtures/` (data only, no test code).
-- Screenshot and export hooks in the application, listed in the README (`MERMAIDLITE_SHOT*`, `MERMAIDLITE_EXPORT*`).
+- Screenshot and export hooks in the application, listed in the README (`TIDEMAP_SHOT*`, `TIDEMAP_EXPORT*`).
 
 ## Consequences
 

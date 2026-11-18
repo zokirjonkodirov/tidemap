@@ -1,6 +1,6 @@
 //! Export of a drawn diagram as SVG or PNG.
 //!
-//! Both formats come from `mermaidlite_diagram::to_svg`, so they match the canvas. SVG files
+//! Both formats come from `tidemap_diagram::to_svg`, so they match the canvas. SVG files
 //! embed the font; PNG files are rasterised by resvg with a font database that holds only the
 //! bundled font.
 
@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use mermaidlite_diagram::{StyleSheet, to_svg};
-use mermaidlite_model::RenderArtifact;
+use tidemap_diagram::{StyleSheet, to_svg};
+use tidemap_model::RenderArtifact;
 use resvg::tiny_skia;
 
 /// Space the SVG writer adds around the scene bounds on every side.

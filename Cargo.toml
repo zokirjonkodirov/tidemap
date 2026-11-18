@@ -13,23 +13,23 @@ serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 sha2 = "0.10"
 anyhow = "1.0"
-mermaidlite-model = { path = "crates/model" }
-mermaidlite-diagram = { path = "crates/diagram" }
+tidemap-model = { path = "crates/model" }
+tidemap-diagram = { path = "crates/diagram" }
 
 [package]
-name = "mermaidlite"
+name = "tidemap"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "A native Rust workspace for Mermaid diagrams"
-default-run = "mermaidlite"
+default-run = "tidemap"
 
 [dependencies]
-mermaidlite-model.workspace = true
-mermaidlite-diagram.workspace = true
-mermaidlite-core = { path = "crates/core" }
-mermaidlite-renderer = { path = "crates/renderer" }
+tidemap-model.workspace = true
+tidemap-diagram.workspace = true
+tidemap-core = { path = "crates/core" }
+tidemap-renderer = { path = "crates/renderer" }
 eframe = { version = "=0.33.3", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 egui = { version = "=0.33.3", features = ["serde"] }
 rfd = "0.15"

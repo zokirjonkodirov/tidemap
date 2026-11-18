@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The app renders flowcharts through `mermaidlite-diagram` with direct egui painting, id-based selection, a controllable style file and scene-based export; the old renderer, its child process and its dependencies are deleted.
+**Goal:** The app renders flowcharts through `tidemap-diagram` with direct egui painting, id-based selection, a controllable style file and scene-based export; the old renderer, its child process and its dependencies are deleted.
 
 **Architecture:** `crates/renderer` becomes a thin in-process job runner (`Engine`): one worker thread, latest-wins scheduling, cooperative cancel, a byte-bounded cache of `Arc<RenderArtifact>`. `src/paint.rs` draws a `Scene` with egui primitives and real text; `src/canvas.rs` keeps camera and input. Colours are resolved at paint time from a `StyleSheet`, so theme and palette changes never re-run layout.
 
-**Tech Stack:** Rust 1.88, egui/eframe 0.33.3, `mermaidlite-diagram` (plan 1), usvg/resvg 0.47 and tiny-skia for PNG export only, `base64` for font embedding.
+**Tech Stack:** Rust 1.88, egui/eframe 0.33.3, `tidemap-diagram` (plan 1), usvg/resvg 0.47 and tiny-skia for PNG export only, `base64` for font embedding.
 
 **Spec:** `docs/superpowers/specs/2026-11-18-own-engine-and-shell-redesign-design.md` (§5.5, §5.6, §5.7 "Not supported", §5.8, §5.9, §7 diagram palette).
 
-**Depends on:** plan 1 complete (`cargo test -p mermaidlite-diagram` green).
+**Depends on:** plan 1 complete (`cargo test -p tidemap-diagram` green).
 
 ## Global Constraints
 
@@ -21,7 +21,7 @@
 - No text painted below 13 px on screen at fit zoom (existing `MIN_LABEL_ZOOM` rule stays); below 5 px on-screen text height, text is not painted at all.
 - Edit debounce 30 ms. Camera animation 160 ms ease-out. No animation of layout changes.
 - PNG export limits unchanged: 8192 px per side, 16 megapixels.
-- Tests: `cargo test -p mermaidlite-diagram`, `cargo test -p mermaidlite-renderer`, `cargo test -p mermaidlite`. Build check: `cargo build --release`.
+- Tests: `cargo test -p tidemap-diagram`, `cargo test -p tidemap-renderer`, `cargo test -p tidemap`. Build check: `cargo build --release`.
 - Visual check: every UI task ends by running the screenshot mode added in Task 5 and reading the PNG.
 - Commit steps apply only if the owner chose `git init` in plan 1.
 
@@ -113,7 +113,7 @@ fn wcag(a: Rgba, b: Rgba) -> f32 { /* relative-luminance contrast ratio */ }
 #[test] fn layout_key_ignores_colours() { let a = StyleSheet::default(); let mut b = a.clone(); b.light.sky.fill = [0,0,0,255]; assert_eq!(a.layout_key(), b.layout_key()); b.metrics.node_gap = 50.0; assert_ne!(a.layout_key(), b.layout_key()); }
 ```
 
-(`serde_json` as a dev-dependency of `mermaidlite-diagram`.)
+(`serde_json` as a dev-dependency of `tidemap-diagram`.)
 
 - [ ] **Step 2:** Run → fail. **Step 3:** Implement. **Step 4:** Run → pass. **Step 5:** Commit.
 
@@ -144,7 +144,7 @@ Output contract: root `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 -24 
 
 ### Task 3: Engine (in-process job runner), built beside the old supervisor
 
-**Files:** Create `crates/renderer/src/engine.rs`; modify `crates/renderer/src/lib.rs`, `crates/renderer/Cargo.toml` (add `mermaidlite-diagram`), `crates/model/src/lib.rs`, `crates/model/Cargo.toml` (add `mermaidlite-diagram`).
+**Files:** Create `crates/renderer/src/engine.rs`; modify `crates/renderer/src/lib.rs`, `crates/renderer/Cargo.toml` (add `tidemap-diagram`), `crates/model/src/lib.rs`, `crates/model/Cargo.toml` (add `tidemap-diagram`).
 
 The old types stay compiling in this task; new types get new names and replace the old ones in Task 5.
 
@@ -153,7 +153,7 @@ The old types stay compiling in this task; new types get new names and replace t
 ```rust
 // crates/model
 pub struct DiagramArtifact { pub id: String, pub diagram_id: String, pub revision: u64, pub source_hash: String,
-    pub rendered: mermaidlite_diagram::Rendered, pub layout_key: u64, pub bytes: usize, pub duration_us: u64 }
+    pub rendered: tidemap_diagram::Rendered, pub layout_key: u64, pub bytes: usize, pub duration_us: u64 }
 pub struct DiagramRequest { pub job_id: u64, pub diagram_id: String, pub revision: u64, pub source: String }
 pub enum EngineEvent { Completed { job_id: u64, diagram_id: String, result: Result<Arc<DiagramArtifact>, RenderDiagnostic> },
                        Exported { job_id: u64, result: Result<PathBuf, String> } }
@@ -172,7 +172,7 @@ impl Engine {
 }
 ```
 
-Decisions: one long-lived thread owning the `Measurer`; each job gets a fresh `Arc<AtomicBool>` cancel flag; `render` sets the previous flag. Cache key = `sha256(source)` + `layout_key`; byte-accounted LRU, limit 96 MiB (existing `CACHE_LIMIT`), size from `Scene::byte_size()` + source length. A cache hit emits `Completed` on the next `poll` without touching the thread. The seed passed to `mermaidlite_diagram::render` is the most recent artifact for the same `diagram_id` (kept in a small map, max 32 entries). `LayoutError::Budget(m)` → `RenderDiagnostic { kind: Budget, message: m, line: None }`; `Canceled` emits nothing. Source over 2 MiB → Budget diagnostic "Diagram source exceeds 2 MiB." without starting a job. A panic inside the job is caught with `catch_unwind` and reported as `DiagnosticKind::Crash` with message "The diagram engine hit an internal error."; the thread keeps running.
+Decisions: one long-lived thread owning the `Measurer`; each job gets a fresh `Arc<AtomicBool>` cancel flag; `render` sets the previous flag. Cache key = `sha256(source)` + `layout_key`; byte-accounted LRU, limit 96 MiB (existing `CACHE_LIMIT`), size from `Scene::byte_size()` + source length. A cache hit emits `Completed` on the next `poll` without touching the thread. The seed passed to `tidemap_diagram::render` is the most recent artifact for the same `diagram_id` (kept in a small map, max 32 entries). `LayoutError::Budget(m)` → `RenderDiagnostic { kind: Budget, message: m, line: None }`; `Canceled` emits nothing. Source over 2 MiB → Budget diagnostic "Diagram source exceeds 2 MiB." without starting a job. A panic inside the job is caught with `catch_unwind` and reported as `DiagnosticKind::Crash` with message "The diagram engine hit an internal error."; the thread keeps running.
 
 - [ ] **Step 1: Write failing tests** (`engine.rs`; helper `wait(&mut Engine) -> Vec<EngineEvent>` polls up to 2 s)
 
@@ -189,7 +189,7 @@ Decisions: one long-lived thread owning the `Measurer`; each job gets a fresh `A
 #[test] fn unsupported_family_is_ok_with_empty_scene() { let mut e = engine(); e.render(req(1, "d", "sequenceDiagram\nA->>B: hi")); let a = first_ok(wait(&mut e)); assert_eq!(a.rendered.family, Family::Sequence); }
 ```
 
-- [ ] **Step 2:** Run `cargo test -p mermaidlite-renderer` → fail. **Step 3:** Implement. **Step 4:** Run → pass; `cargo build --release` still succeeds with the old path intact. **Step 5:** Commit.
+- [ ] **Step 2:** Run `cargo test -p tidemap-renderer` → fail. **Step 3:** Implement. **Step 4:** Run → pass; `cargo build --release` still succeeds with the old path intact. **Step 5:** Commit.
 
 ---
 
@@ -220,7 +220,7 @@ Emphasis: when `selected` is `Some`, every item not in `strong_nodes`/`strong_ed
 #[test] fn big_overview_paints_no_text() { let sc = scene(&bench_source(10_000)); let zoom = 800.0 / sc.bounds.h.max(sc.bounds.w); let st = frame(&sc, Camera { x: 0.0, y: 0.0, zoom }); assert_ne!(st.lod, Lod::Full); assert_eq!(st.texts, 0); }
 ```
 
-- [ ] **Step 2:** Run `cargo test -p mermaidlite paint` → fail. **Step 3:** Implement. **Step 4:** Run → pass. **Step 5:** Commit.
+- [ ] **Step 2:** Run `cargo test -p tidemap paint` → fail. **Step 3:** Implement. **Step 4:** Run → pass. **Step 5:** Commit.
 
 ---
 
@@ -248,7 +248,7 @@ Changes:
 - `crates/model`: remove `Preset`, `Scene`, `ScenePrimitive`, `SpatialNode`, `DiagramLabel`, `DiagramLink`, the old `RenderArtifact`, `RenderRequest`, `RenderEvent`, `Settings::preset`. Rename `DiagramArtifact`/`DiagramRequest`/`EngineEvent` to `RenderArtifact`/`RenderRequest`/`RenderEvent` so call sites keep their names. `ExportRequest` keeps `artifact`, `path`, `format`, `background`, `scale` and gains `dark: bool`.
 - `src/app.rs`: `renderer: Engine`; `signature()` becomes the source text only (theme and preset no longer part of it); `Progress` handling and `render_stage` removed; `Completed` accepted only when `job_id` and `diagram_id` equal the active ones; the Authored/Warm preset control in Settings removed; export temporarily disabled with tooltip "Export returns in the next step" until Task 9.
 - `src/canvas.rs`: overview texture, PNG decode thread, `IMAGE_DECODE_LOCK`, label search state removed; painting delegated to `paint_scene`; click → `scene.hit(world_point, 6.0 / zoom)`.
-- `src/main.rs`: `--render-worker` branch removed. New dev mode: when env `MERMAIDLITE_SHOT=<png path>` is set and a file path is the first CLI argument, open that file, wait until its first artifact has been painted for two frames, request `egui::ViewportCommand::Screenshot`, save the image to the path, and exit. Optional `MERMAIDLITE_SHOT_SIZE=WxH` (default 1440x940) and `MERMAIDLITE_SHOT_THEME=dark`.
+- `src/main.rs`: `--render-worker` branch removed. New dev mode: when env `TIDEMAP_SHOT=<png path>` is set and a file path is the first CLI argument, open that file, wait until its first artifact has been painted for two frames, request `egui::ViewportCommand::Screenshot`, save the image to the path, and exit. Optional `TIDEMAP_SHOT_SIZE=WxH` (default 1440x940) and `TIDEMAP_SHOT_THEME=dark`.
 - `Cargo.toml` of renderer: drop `mermaid-rs-renderer`, `lyon`, `roxmltree`, `xmlwriter`, `bincode`.
 
 - [ ] **Step 1: Write failing tests** in `src/canvas.rs`
@@ -259,8 +259,8 @@ Changes:
 ```
 
 - [ ] **Step 2:** Run → fail. **Step 3:** Make the changes above; delete the four files.
-- [ ] **Step 4:** `cargo build --release` → succeeds with no warnings about unused legacy code. `cargo tree -p mermaidlite | grep -E "mermaid-rs-renderer|lyon|bincode|roxmltree"` → no output. `cargo test --workspace` → pass.
-- [ ] **Step 5:** Visual check: `MERMAIDLITE_SHOT=<scratch>/t5.png target/release/mermaidlite.exe examples/system.mmd`, then read the PNG. Expected: pastel rounded nodes, a tinted "Your local workspace" container with its title top-left, smooth grey edges with arrowheads, crisp text. Repeat with `crates/diagram/tests/fixtures/llm_architecture.mmd`.
+- [ ] **Step 4:** `cargo build --release` → succeeds with no warnings about unused legacy code. `cargo tree -p tidemap | grep -E "mermaid-rs-renderer|lyon|bincode|roxmltree"` → no output. `cargo test --workspace` → pass.
+- [ ] **Step 5:** Visual check: `TIDEMAP_SHOT=<scratch>/t5.png target/release/tidemap.exe examples/system.mmd`, then read the PNG. Expected: pastel rounded nodes, a tinted "Your local workspace" container with its title top-left, smooth grey edges with arrowheads, crisp text. Repeat with `crates/diagram/tests/fixtures/llm_architecture.mmd`.
 - [ ] **Step 6:** Commit.
 
 ---
@@ -283,7 +283,7 @@ impl SourceEditor { pub fn select_range(&mut self, chars: (usize, usize)); }   /
 
 Behaviour: click node → `canvas.selected = Some(id)`, `Emphasis` built from `scene.neighbours(id)`; if the source panel is open, `editor.select_range(node span)`. Click edge → `canvas.selected` stays `None`; the edge's span is selected in the editor and the edge plus both endpoint nodes are emphasised (rest dimmed). Click empty canvas or Esc → clear. When the editor cursor moves (not on every frame: only when `EditorResponse::cursor` changed) and maps to a node via `scene.node_at_offset`, that node becomes selected without moving the camera. Diagram search (`Ctrl+F` with canvas focus) uses `scene.find`; Enter cycles matches with `focus_node`. The outline panel lists `scene.nodes` labels in reading order; click → `focus_node`. `source_line_for_label` and `last_source_jump` are deleted.
 
-- [ ] **Step 1: Write failing tests** (`src/source_map.rs`; build `DiagramBlock`s with `mermaidlite_core::source::extract_diagrams`)
+- [ ] **Step 1: Write failing tests** (`src/source_map.rs`; build `DiagramBlock`s with `tidemap_core::source::extract_diagrams`)
 
 ```rust
 #[test] fn standalone_mmd_maps_directly() { let src = "flowchart TB\nAlpha[Привет] --> Beta"; /* block.source == src */ let r = block_to_editor_chars(&block, false, src, span_of(src, "Beta")).unwrap(); assert_eq!(chars(src, r), "Beta"); }

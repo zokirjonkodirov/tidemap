@@ -1,5 +1,5 @@
 [package]
-name = "mermaidlite-model"
+name = "tidemap-model"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,4 +7,4 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 
-mermaidlite-diagram.workspace = true
+tidemap-diagram.workspace = true

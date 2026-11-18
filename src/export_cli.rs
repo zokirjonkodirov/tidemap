@@ -1,16 +1,16 @@
-//! Dev mode `MERMAIDLITE_EXPORT=<out.svg|out.png> mermaidlite <file>`: renders the first diagram
+//! Dev mode `TIDEMAP_EXPORT=<out.svg|out.png> tidemap <file>`: renders the first diagram
 //! of the file, writes the export through the same code the Export dialog uses and exits.
 //!
-//! `MERMAIDLITE_EXPORT_SCALE` sets the PNG scale (default 1); `MERMAIDLITE_SHOT_THEME=dark`
+//! `TIDEMAP_EXPORT_SCALE` sets the PNG scale (default 1); `TIDEMAP_SHOT_THEME=dark`
 //! exports with the dark palette.
 
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use mermaidlite_core::{default_data_dir, source::extract_diagrams};
-use mermaidlite_model::{ExportFormat, ExportRequest, RenderEvent, RenderRequest};
-use mermaidlite_renderer::Engine;
+use tidemap_core::{default_data_dir, source::extract_diagrams};
+use tidemap_model::{ExportFormat, ExportRequest, RenderEvent, RenderRequest};
+use tidemap_renderer::Engine;
 
 use crate::style_file::StyleFile;
 
@@ -30,11 +30,11 @@ pub fn run(out: &Path) -> Result<(), String> {
         Some(extension) if extension.eq_ignore_ascii_case("svg") => ExportFormat::Svg,
         _ => return Err("the output path must end in .svg or .png".into()),
     };
-    let scale = std::env::var("MERMAIDLITE_EXPORT_SCALE")
+    let scale = std::env::var("TIDEMAP_EXPORT_SCALE")
         .ok()
         .and_then(|value| value.trim().trim_end_matches(['x', 'X']).parse::<f32>().ok())
         .unwrap_or(1.0);
-    let dark = std::env::var("MERMAIDLITE_SHOT_THEME").is_ok_and(|theme| theme.eq_ignore_ascii_case("dark"));
+    let dark = std::env::var("TIDEMAP_SHOT_THEME").is_ok_and(|theme| theme.eq_ignore_ascii_case("dark"));
 
     let style = StyleFile::load(&default_data_dir()).sheet;
     let mut engine = Engine::new(Arc::new(|| {}), Arc::from(FONT_MEDIUM), style);

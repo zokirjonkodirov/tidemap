@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use mermaidlite_diagram::StyleSheet;
+use tidemap_diagram::StyleSheet;
 
 const FILE_NAME: &str = "style.json";
 /// The file is looked at most this often.

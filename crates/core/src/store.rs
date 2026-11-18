@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, anyhow, bail};
-use mermaidlite_model::{RecentWorkspace, RecoveryRecord, Settings, WorkspaceState};
+use tidemap_model::{RecentWorkspace, RecoveryRecord, Settings, WorkspaceState};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -263,7 +263,7 @@ pub(crate) fn atomic_write(
         .parent()
         .context("A save destination needs a parent folder")?;
     let mut temporary = tempfile::Builder::new()
-        .prefix(".mermaidlite-")
+        .prefix(".tidemap-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .context("Create temporary save file")?;

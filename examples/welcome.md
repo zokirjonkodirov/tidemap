@@ -1,6 +1,6 @@
 # A little clarity
 
-This example belongs to MermaidLite. Open the `examples` folder to explore the reading and editing workflow.
+This example belongs to Tidemap. Open the `examples` folder to explore the reading and editing workflow.
 
 ## From idea to delivery
 

@@ -1952,80 +1952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mermaidlite"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "eframe",
- "egui",
- "image",
- "mermaidlite-core",
- "mermaidlite-diagram",
- "mermaidlite-model",
- "mermaidlite-renderer",
- "rfd",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "mermaidlite-core"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "directories",
- "ignore",
- "libc",
- "mermaidlite-model",
- "notify",
- "pulldown-cmark",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
-]
-
-[[package]]
-name = "mermaidlite-diagram"
-version = "0.2.0"
-dependencies = [
- "serde",
- "ttf-parser",
-]
-
-[[package]]
-name = "mermaidlite-model"
-version = "0.2.0"
-dependencies = [
- "mermaidlite-diagram",
- "serde",
-]
-
-[[package]]
-name = "mermaidlite-renderer"
-version = "0.2.0"
-dependencies = [
- "base64",
- "mermaidlite-diagram",
- "mermaidlite-model",
- "resvg",
- "serde",
- "serde_json",
- "sha2",
- "tiny-skia",
- "usvg",
-]
-
-[[package]]
-name = "mermaidlite-xtask"
-version = "0.2.0"
-dependencies = [
- "mermaidlite-diagram",
- "serde_json",
- "sha2",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3345,6 +3271,80 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.10",
+]
+
+[[package]]
+name = "tidemap"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "eframe",
+ "egui",
+ "image",
+ "rfd",
+ "serde",
+ "serde_json",
+ "tidemap-core",
+ "tidemap-diagram",
+ "tidemap-model",
+ "tidemap-renderer",
+]
+
+[[package]]
+name = "tidemap-core"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "ignore",
+ "libc",
+ "notify",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tidemap-model",
+]
+
+[[package]]
+name = "tidemap-diagram"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "ttf-parser",
+]
+
+[[package]]
+name = "tidemap-model"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "tidemap-diagram",
+]
+
+[[package]]
+name = "tidemap-renderer"
+version = "0.2.0"
+dependencies = [
+ "base64",
+ "resvg",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tidemap-diagram",
+ "tidemap-model",
+ "tiny-skia",
+ "usvg",
+]
+
+[[package]]
+name = "tidemap-xtask"
+version = "0.2.0"
+dependencies = [
+ "serde_json",
+ "sha2",
+ "tidemap-diagram",
 ]
 
 [[package]]

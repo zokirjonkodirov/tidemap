@@ -4,14 +4,14 @@
 //! by whitespace and exactly one primary button, right-aligned.
 
 use egui::{Align, Context, Frame, Id, Layout, Margin, RichText, Ui, vec2};
-use mermaidlite_diagram::ColorBy;
-use mermaidlite_model::{ExportFormat, Theme};
-use mermaidlite_renderer::export;
+use tidemap_diagram::ColorBy;
+use tidemap_model::{ExportFormat, Theme};
+use tidemap_renderer::export;
 
 pub use super::controls::{danger_button, primary_button, quiet_button};
 use super::controls::{key_caps, segmented, switch};
 use crate::{
-    app::{Dialog, MermaidLiteApp},
+    app::{Dialog, TidemapApp},
     motion,
     theme::{self, Palette, token},
 };
@@ -40,7 +40,7 @@ pub fn dialog_frame(p: Palette) -> Frame {
 }
 
 /// Shows whichever dialogs are open.
-pub fn show(app: &mut MermaidLiteApp, ctx: &Context, p: Palette) {
+pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) {
     if let Some(dialog) = app.dialog {
         let width = match dialog {
             Dialog::Help => SHORTCUTS_WIDTH,
@@ -170,7 +170,7 @@ fn scroll(ui: &mut Ui, ctx: &Context, add_contents: impl FnOnce(&mut Ui)) {
 // Settings
 // ---------------------------------------------------------------------------
 
-fn settings(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn settings(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     title(ui, "Settings");
     let ctx = ui.ctx().clone();
     let mut changed = false;
@@ -269,7 +269,7 @@ fn settings(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
 // Export
 // ---------------------------------------------------------------------------
 
-fn export_dialog(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn export_dialog(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     title(ui, "Export diagram");
     ui.spacing_mut().item_spacing.y = ROW_GAP;
     let artifact = app.active_preview().map(|preview| preview.artifact.clone());
@@ -376,7 +376,7 @@ fn chord(ui: &mut Ui, p: Palette, keys: &str) {
     }
 }
 
-fn shortcuts(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn shortcuts(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     title(ui, "Keyboard shortcuts");
     let ctx = ui.ctx().clone();
     ui.add_space(token::SPACE[1]);
@@ -412,7 +412,7 @@ fn shortcuts(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
 // Diagnostics
 // ---------------------------------------------------------------------------
 
-fn diagnostics(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) {
+fn diagnostics(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
     title(ui, "Diagnostics");
     note(ui, "Local runtime information. Diagram source is not included.", p.muted);
     ui.add_space(token::SPACE[2]);
@@ -445,7 +445,7 @@ fn diagnostics(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette)
 // Close with unsaved changes
 // ---------------------------------------------------------------------------
 
-fn close_dialog(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette) {
+fn close_dialog(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
     title(ui, "Keep your changes?");
     let count = app.unsaved_count();
     let files = if count == 1 { "file" } else { "files" };
@@ -470,7 +470,7 @@ fn close_dialog(app: &mut MermaidLiteApp, ui: &mut Ui, ctx: &Context, p: Palette
 // Recovery and conflict
 // ---------------------------------------------------------------------------
 
-fn recovery(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, id: String) {
+fn recovery(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
     let Some(info) = app.recovery_info(&id) else {
         app.recovery_file = None;
         return;
@@ -498,7 +498,7 @@ fn recovery(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, id: String) {
     }
 }
 
-fn conflict(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, id: String) {
+fn conflict(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
     let Some(info) = app.conflict_info(&id) else {
         app.conflict_file = None;
         return;

@@ -6,10 +6,10 @@
 
 use egui::{Context, CursorIcon, Frame, Id, Margin, Rect, Sense, Stroke, Ui, UiBuilder, Vec2};
 
-use mermaidlite_diagram::ItemId;
+use tidemap_diagram::ItemId;
 
 use crate::{
-    app::{CardAction, MermaidLiteApp},
+    app::{CardAction, TidemapApp},
     canvas, motion,
     theme::{self, Palette, token},
 };
@@ -79,13 +79,13 @@ pub fn canvas_fraction(window: Vec2, mode: FrameMode, sidebar_w: f32, source_w: 
     (width.max(0.0) * height.max(0.0)) / (window.x * window.y).max(1.0)
 }
 
-fn sidebar_width(app: &MermaidLiteApp) -> f32 {
+fn sidebar_width(app: &TidemapApp) -> f32 {
     let stored = app.settings.sidebar_width;
     let width = if stored > 0.0 { stored } else { token::SIDEBAR };
     width.clamp(token::SIDEBAR_MIN, token::SIDEBAR_MAX)
 }
 
-fn source_width(app: &MermaidLiteApp, window_width: f32) -> f32 {
+fn source_width(app: &TidemapApp, window_width: f32) -> f32 {
     let stored = app.settings.editor_width;
     let width = if stored > 0.0 { stored } else { token::SOURCE };
     let max = (window_width - MIN_CANVAS_WIDTH).max(token::SOURCE_MIN);
@@ -93,7 +93,7 @@ fn source_width(app: &MermaidLiteApp, window_width: f32) -> f32 {
 }
 
 /// Lays out the whole window for one frame.
-pub fn frame(app: &mut MermaidLiteApp, ctx: &Context) {
+pub fn frame(app: &mut TidemapApp, ctx: &Context) {
     let p = theme::palette(app.dark);
     let screen = ctx.content_rect();
     ctx.layer_painter(egui::LayerId::background())
@@ -205,7 +205,7 @@ fn sliding_card(ui: &mut Ui, panel: Rect, full: f32, from_left: bool, t: f32, ad
     });
 }
 
-fn sidebar_panel(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, t: f32) {
+fn sidebar_panel(app: &mut TidemapApp, ctx: &Context, p: Palette, t: f32) {
     let full = sidebar_width(app);
     let width = (full * t).max(1.0);
     let mut dragged = None;
@@ -233,7 +233,7 @@ fn sidebar_panel(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, t: f32) {
     }
 }
 
-fn source_panel(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, t: f32) {
+fn source_panel(app: &mut TidemapApp, ctx: &Context, p: Palette, t: f32) {
     let window_width = ctx.content_rect().width();
     let full = source_width(app, window_width);
     let width = (full * t).max(1.0);
@@ -264,7 +264,7 @@ fn source_panel(app: &mut MermaidLiteApp, ctx: &Context, p: Palette, t: f32) {
 }
 
 /// The area between the panels. Returns the rectangle the pill is centred on.
-fn central(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, mode: FrameMode) -> Rect {
+fn central(app: &mut TidemapApp, ui: &mut Ui, p: Palette, mode: FrameMode) -> Rect {
     let area = ui.available_rect_before_wrap();
     if app.active_file.is_empty() {
         if app.workspace.is_none() {
@@ -297,7 +297,7 @@ fn central(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette, mode: FrameMode) -
 }
 
 /// The diagram of the active block, or a card or empty state when there is nothing to draw.
-fn canvas_view(app: &mut MermaidLiteApp, ui: &mut Ui, p: Palette) {
+fn canvas_view(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     app.canvas.show_minimap = app.settings.show_minimap;
     let key = app.diagram_key();
     let artifact = app.previews.get(&key).map(|preview| preview.artifact.clone());

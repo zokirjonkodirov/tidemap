@@ -5,7 +5,7 @@ use crate::{
     store::{EDIT_LIMIT, Store, atomic_write, now, valid_hash},
 };
 use anyhow::{Context, Result, anyhow, bail};
-use mermaidlite_model::{CoreEvent, DocumentSnapshot, RecoveryRecord, SaveRequest, SaveResult};
+use tidemap_model::{CoreEvent, DocumentSnapshot, RecoveryRecord, SaveRequest, SaveResult};
 use std::{
     collections::HashMap,
     fs,
@@ -44,9 +44,9 @@ pub(crate) fn spawn(
 ) -> std::io::Result<Sender<Task>> {
     let (tasks, receiver) = mpsc::channel();
     std::thread::Builder::new()
-        .name("mermaidlite-files".into())
+        .name("tidemap-files".into())
         .spawn(move || {
-            let mut previous = HashMap::<String, Vec<mermaidlite_model::DiagramBlock>>::new();
+            let mut previous = HashMap::<String, Vec<tidemap_model::DiagramBlock>>::new();
             let mut previous_order = Vec::<String>::new();
             let send = |event: CoreEvent| {
                 let _ = sender.send(Internal::Core(event));
@@ -158,7 +158,7 @@ pub(crate) fn read_document(
     store: &Store,
     id: &str,
     resource: &Resource,
-    previous: &[mermaidlite_model::DiagramBlock],
+    previous: &[tidemap_model::DiagramBlock],
 ) -> Result<DocumentSnapshot> {
     let recovery = {
         let mut memory = store

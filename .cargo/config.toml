@@ -2,4 +2,4 @@
 jobs = 4
 
 [alias]
-native = "run --release --package mermaidlite-xtask --"
+native = "run --release --package tidemap-xtask --"

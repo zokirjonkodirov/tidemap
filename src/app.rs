@@ -1,8 +1,8 @@
 use std::{collections::{BTreeMap, BTreeSet, HashMap}, path::PathBuf, sync::Arc, time::{Duration,Instant}};
-use mermaidlite_core::{WorkspaceCore,default_data_dir,source::{extract_diagrams,patch_diagram}};
-use mermaidlite_model::*;
-use mermaidlite_diagram::{ColorBy,Family,NodeId,Span,StyleSheet};
-use mermaidlite_renderer::Engine;
+use tidemap_core::{WorkspaceCore,default_data_dir,source::{extract_diagrams,patch_diagram}};
+use tidemap_model::*;
+use tidemap_diagram::{ColorBy,Family,NodeId,Span,StyleSheet};
+use tidemap_renderer::Engine;
 use crate::{ui::{self,dialogs,palette::Command,tree},canvas::DiagramCanvas,editor::SourceEditor,source_map,style_file::{self,StyleFile},theme};
 
 pub(crate) struct Buffer {
@@ -51,7 +51,7 @@ pub fn should_show(new_diag_count:usize,have_clean_previous:bool,since_last_edit
     new_diag_count==0||!have_clean_previous||since_last_edit>=HOLD_AFTER_EDIT
 }
 
-pub struct MermaidLiteApp {
+pub struct TidemapApp {
     pub(crate) core:Option<WorkspaceCore>, pub(crate) renderer:Engine, pub(crate) style:StyleSheet, pub(crate) shot:Option<ShotState>, pub(crate) settings:Settings, pub(crate) dark:bool,
     pub(crate) workspace:Option<WorkspaceSnapshot>,pub(crate) recents:Vec<RecentWorkspace>,pub(crate) recoveries:Vec<RecoveryRecord>,pub(crate) buffers:BTreeMap<String,Buffer>,
     pub(crate) active_file:String,pub(crate) active_block:String,pub(crate) state:WorkspaceState,pub(crate) canvas:DiagramCanvas,pub(crate) editor:SourceEditor,
@@ -88,7 +88,7 @@ pub struct MermaidLiteApp {
     workspace_settled:bool,
 }
 
-impl MermaidLiteApp {
+impl TidemapApp {
     pub fn new(cc:&eframe::CreationContext<'_>,options:StartOptions)->Self {
         let ctx=cc.egui_ctx.clone();let wake:Arc<dyn Fn()+Send+Sync>=Arc::new(move||ctx.request_repaint());
         let style_file=StyleFile::load(&default_data_dir());let style=style_file.sheet.clone();let font:Arc<[u8]>=Arc::from(FONT_MEDIUM);let renderer=Engine::new(wake.clone(),font,style.clone());
@@ -394,7 +394,7 @@ impl MermaidLiteApp {
     pub(crate) fn open_diagnostics(&mut self){
         self.dialog=Some(Dialog::Diagnostics);let artifact=self.active_preview().map(|preview|preview.artifact.clone());
         let engine=self.renderer.diagnostics();
-        self.diagnostics_text=format!("MermaidLite {}\nRuntime: native Rust + egui / eframe\nProtocol: {}\nFiles indexed: {}\nOpen buffers: {}\nDirty buffers: {}\nCached artifacts: {}\nActive renderer job: {}\nSource offsets: UTF-8 bytes\nPersistence: native app-data journals\n\nActive preview\nEngine: mermaidlite-diagram, in process\nRender time: {:.1} ms\nBytes: {}\nNodes: {}\nEdges: {}\nEngine cache: {}\nPainted last frame: {}\n\nNo benchmark or release validation has been performed.",env!("CARGO_PKG_VERSION"),PROTOCOL_VERSION,self.workspace.as_ref().map(|workspace|workspace.files.len()).unwrap_or(0),self.buffers.len(),self.buffers.values().filter(|buffer|buffer.dirty()).count(),self.previews.len(),self.active_job.is_some(),artifact.as_ref().map(|artifact|artifact.duration_us as f64/1000.0).unwrap_or(0.0),artifact.as_ref().map(|artifact|artifact.bytes).unwrap_or(0),artifact.as_ref().map(|artifact|artifact.rendered.scene.nodes.len()).unwrap_or(0),artifact.as_ref().map(|artifact|artifact.rendered.scene.edges.len()).unwrap_or(0),engine,self.canvas.last_stats.map(|stats|format!("{} items, {} texts, {:?} detail",stats.items,stats.texts,stats.lod)).unwrap_or_else(||"nothing".into()));
+        self.diagnostics_text=format!("Tidemap {}\nRuntime: native Rust + egui / eframe\nProtocol: {}\nFiles indexed: {}\nOpen buffers: {}\nDirty buffers: {}\nCached artifacts: {}\nActive renderer job: {}\nSource offsets: UTF-8 bytes\nPersistence: native app-data journals\n\nActive preview\nEngine: tidemap-diagram, in process\nRender time: {:.1} ms\nBytes: {}\nNodes: {}\nEdges: {}\nEngine cache: {}\nPainted last frame: {}\n\nNo benchmark or release validation has been performed.",env!("CARGO_PKG_VERSION"),PROTOCOL_VERSION,self.workspace.as_ref().map(|workspace|workspace.files.len()).unwrap_or(0),self.buffers.len(),self.buffers.values().filter(|buffer|buffer.dirty()).count(),self.previews.len(),self.active_job.is_some(),artifact.as_ref().map(|artifact|artifact.duration_us as f64/1000.0).unwrap_or(0.0),artifact.as_ref().map(|artifact|artifact.bytes).unwrap_or(0),artifact.as_ref().map(|artifact|artifact.rendered.scene.nodes.len()).unwrap_or(0),artifact.as_ref().map(|artifact|artifact.rendered.scene.edges.len()).unwrap_or(0),engine,self.canvas.last_stats.map(|stats|format!("{} items, {} texts, {:?} detail",stats.items,stats.texts,stats.lod)).unwrap_or_else(||"nothing".into()));
     }
 }
 
@@ -415,7 +415,7 @@ pub(crate) struct ConflictInfo {
 }
 
 /// Commands: everything the palette, the shortcuts and the dialogs ask the app to do.
-impl MermaidLiteApp {
+impl TidemapApp {
     pub(crate) fn run_command(&mut self, command: Command) {
         let file = self.active_file.clone();
         match command {
@@ -818,7 +818,7 @@ impl MermaidLiteApp {
 }
 
 /// Screenshot dev mode: surfaces are opened by hooks, then the window is saved as a PNG and the app quits.
-impl MermaidLiteApp {
+impl TidemapApp {
     /// Whether a requested hook has not run yet.
     fn shot_hooks_pending(&self) -> bool {
         self.shot.as_ref().is_some_and(|shot| {
@@ -964,7 +964,7 @@ impl MermaidLiteApp {
     }
 }
 
-impl eframe::App for MermaidLiteApp {
+impl eframe::App for TidemapApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         egui::Rgba::from(theme::palette(self.dark).app).to_array()
     }

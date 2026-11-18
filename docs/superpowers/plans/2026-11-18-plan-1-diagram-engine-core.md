@@ -12,14 +12,14 @@
 
 ## Global Constraints
 
-- Crate name `mermaidlite-diagram`, path `crates/diagram`, added to workspace `members` and `[workspace.dependencies]`.
+- Crate name `tidemap-diagram`, path `crates/diagram`, added to workspace `members` and `[workspace.dependencies]`.
 - No dependency on egui, usvg, resvg, lyon, or `mermaid-rs-renderer`.
 - All spans are UTF-8 byte offsets into the source passed to `parse` (`u32`).
 - No `unsafe`. No panics on any input: every public function returns a value or an error for arbitrary bytes.
 - Every loop in `layout` that is not O(1) per element checks `cancel: &AtomicBool` at least once per outer iteration and returns `LayoutError::Canceled`.
 - Hard caps: 20,000 nodes, 20,000 edges, world bounds 10,000,000 units per side → `LayoutError::Budget(String)`.
 - Default metrics (spec §7): font size 14, line height 20, max label width 220, node padding x 18 / y 12, corner radius 12, rank spacing 64, node spacing 40, edge label font 13, cluster padding 24, cluster title height 28.
-- Test command for everything in this plan: `cargo test -p mermaidlite-diagram`. Adding a dependency requires one `cargo build -p mermaidlite-diagram` without `--locked` to update `Cargo.lock`.
+- Test command for everything in this plan: `cargo test -p tidemap-diagram`. Adding a dependency requires one `cargo build -p tidemap-diagram` without `--locked` to update `Cargo.lock`.
 - The folder is not a git repository. Task 1 step 1 asks the owner whether to run `git init`. If yes, each task ends with a commit `feat(diagram): <task title>`; if no, skip commit steps.
 - Fonts: tests load `assets/fonts/Inter-Regular.ttf` if present, else `assets/fonts/Manrope.ttf` (Inter arrives in plan 3; do not block on it).
 
@@ -66,7 +66,7 @@ tools/xtask/src/bench.rs  `cargo native bench` timing harness
 
 **Files:**
 - Create: `crates/diagram/Cargo.toml`, `crates/diagram/src/lib.rs`, `crates/diagram/src/graph.rs`
-- Modify: `Cargo.toml` (workspace `members`, `[workspace.dependencies] mermaidlite-diagram = { path = "crates/diagram" }`)
+- Modify: `Cargo.toml` (workspace `members`, `[workspace.dependencies] tidemap-diagram = { path = "crates/diagram" }`)
 
 **Interfaces — Produces:**
 
@@ -119,7 +119,7 @@ pub fn detect(source: &str) -> Family;
 }
 ```
 
-- [ ] **Step 3:** Run `cargo test -p mermaidlite-diagram`. Expected: fails to compile (`detect` missing).
+- [ ] **Step 3:** Run `cargo test -p tidemap-diagram`. Expected: fails to compile (`detect` missing).
 - [ ] **Step 4:** Implement `graph.rs` types and `detect`.
 - [ ] **Step 5:** Run tests. Expected: 1 passed.
 - [ ] **Step 6:** Commit.
@@ -261,7 +261,7 @@ Recovery: on an unexpected token, emit `Diagnostic { line (1-based), column (1-b
 
 - [ ] **Step 2:** Run. Expected: failures.
 - [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run `cargo test -p mermaidlite-diagram`. Expected: all pass, `never_panic` finishes in under 10 s.
+- [ ] **Step 4:** Run `cargo test -p tidemap-diagram`. Expected: all pass, `never_panic` finishes in under 10 s.
 - [ ] **Step 5:** Commit.
 
 ---
@@ -650,9 +650,9 @@ fn sc(src: &str) -> Scene { let (g, l) = crate::layout::lay(src); Scene::build(&
 **Files:**
 - Create: `crates/diagram/tests/fixtures/` with at least these files — `chain.mmd`, `tree.mmd`, `diamond_decisions.mmd` (8 decision nodes with yes/no labels), `cycles.mmd`, `nested_subgraphs.mmd` (3 levels), `cross_cluster_edges.mmd`, `lr_pipeline.mmd`, `mixed_directions.mmd`, `all_shapes.mmd`, `long_labels.mmd`, `unicode.mmd`, `disconnected.mmd`, `self_loops_parallel.mmd`, `llm_architecture.mmd` (about 60 nodes, 6 subgraphs, written to resemble an LLM-generated system overview), plus a copy of `examples/system.mmd`.
 - Create: `crates/diagram/tests/invariants.rs`
-- Create: `tools/xtask/src/bench.rs`; modify `tools/xtask/src/main.rs` (add `bench` to the accepted actions and to the help text) and `tools/xtask/Cargo.toml` (depend on `mermaidlite-diagram`).
+- Create: `tools/xtask/src/bench.rs`; modify `tools/xtask/src/main.rs` (add `bench` to the accepted actions and to the help text) and `tools/xtask/Cargo.toml` (depend on `tidemap-diagram`).
 
-**Interfaces — Consumes:** `mermaidlite_diagram::{parse, render, Measurer, Metrics, Scene, Rect, Endpoint}`.
+**Interfaces — Consumes:** `tidemap_diagram::{parse, render, Measurer, Metrics, Scene, Rect, Endpoint}`.
 
 `invariants.rs` runs every fixture through `render` and asserts, with the fixture name in every message:
 1. zero parse diagnostics;
@@ -670,11 +670,11 @@ It also prints one line per fixture: `name  nodes  edges  crossings  aspect` (cr
 `bench.rs`: `cargo native bench` builds graphs in memory as source text — `chain(n)`, `tree(n, fanout 3)`, `layered_dense(n)` (ranks of 20, each node 2 random forward edges, fixed seed), `clustered(n)` (clusters of 25 with 10% cross edges) — for n in 200, 2,000, 10,000; runs `parse`, `layout`, `Scene::build` separately, best of 5, and prints a table of milliseconds. It exits non-zero only if a run panics. Spec targets to compare against by eye: 200 nodes < 5 ms, 2,000 < 60 ms, 10,000 < 800 ms (parse + layout + scene, release build).
 
 - [ ] **Step 1:** Write the fixtures and `invariants.rs`.
-- [ ] **Step 2:** Run `cargo test -p mermaidlite-diagram --test invariants -- --nocapture`. Expected: failures are real layout bugs — fix them in the owning module (do not loosen an invariant).
+- [ ] **Step 2:** Run `cargo test -p tidemap-diagram --test invariants -- --nocapture`. Expected: failures are real layout bugs — fix them in the owning module (do not loosen an invariant).
 - [ ] **Step 3:** Write `bench.rs` and wire the `bench` action.
 - [ ] **Step 4:** Run `cargo run --release -p xtask -- bench` (check `tools/xtask/Cargo.toml` for the actual package name). Expected: a table for 4 topologies × 3 sizes with no panic. Record the table at the bottom of this plan file under "Measured".
 - [ ] **Step 5:** If any 2,000-node row exceeds 60 ms or any 10,000-node row exceeds 800 ms, profile that stage and fix the hot spot (typical culprits: transpose loop, crossing count, network simplex cut-value recomputation); re-run; update the table. If a target still cannot be met, write the measured number and the reason under "Measured" rather than changing the target.
-- [ ] **Step 6:** Run the full suite once more: `cargo test -p mermaidlite-diagram`. Expected: all pass.
+- [ ] **Step 6:** Run the full suite once more: `cargo test -p tidemap-diagram`. Expected: all pass.
 - [ ] **Step 7:** Commit.
 
 ---

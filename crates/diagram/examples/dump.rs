@@ -1,4 +1,4 @@
-//! Debug tool: `cargo run --release -p mermaidlite-diagram --example dump -- <in.mmd> <out.svg>`
+//! Debug tool: `cargo run --release -p tidemap-diagram --example dump -- <in.mmd> <out.svg>`
 //! Parses and lays out a Mermaid flowchart and writes a plain debug SVG.
 
 use std::fmt::Write as _;
@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use mermaidlite_diagram::{Measurer, Metrics, PathCmd, layout, parse, shape};
+use tidemap_diagram::{Measurer, Metrics, PathCmd, layout, parse, shape};
 
 type Pt = [f32; 2];
 
@@ -76,11 +76,11 @@ fn seg_rect(a: Pt, b: Pt, r: [f32; 4]) -> bool {
 }
 
 fn quality_line(
-    g: &mermaidlite_diagram::Graph,
-    lay: &mermaidlite_diagram::Layout,
+    g: &tidemap_diagram::Graph,
+    lay: &tidemap_diagram::Layout,
     measurer: &Measurer,
 ) -> String {
-    use mermaidlite_diagram::Endpoint;
+    use tidemap_diagram::Endpoint;
     let b = lay.bounds;
     let polys: Vec<Vec<Pt>> = lay.edges.iter().map(|e| flatten(&e.points)).collect();
     let mut total = 0.0f32;
@@ -146,7 +146,7 @@ fn quality_line(
         for (i, p) in polys.iter().enumerate() {
             let mut hit = false;
             for (k, r) in lay.nodes.iter().enumerate() {
-                if ends[i].contains(&Endpoint::Node(mermaidlite_diagram::NodeId(k as u32))) {
+                if ends[i].contains(&Endpoint::Node(tidemap_diagram::NodeId(k as u32))) {
                     continue;
                 }
                 let rr = [r.x + 2.0, r.y + 2.0, r.right() - 2.0, r.bottom() - 2.0];
@@ -203,7 +203,7 @@ fn quality_line(
         }
         false
     };
-    let hit = |p: &mermaidlite_diagram::Rect, q: &mermaidlite_diagram::Rect| {
+    let hit = |p: &tidemap_diagram::Rect, q: &tidemap_diagram::Rect| {
         p.x < q.right() && q.x < p.right() && p.y < q.bottom() && q.y < p.bottom()
     };
     let verbose = std::env::var("DUMP_VERBOSE").is_ok();
@@ -276,8 +276,8 @@ fn quality_line(
 }
 
 fn invariants_line(
-    g: &mermaidlite_diagram::Graph,
-    lay: &mermaidlite_diagram::Layout,
+    g: &tidemap_diagram::Graph,
+    lay: &tidemap_diagram::Layout,
     m: &Metrics,
 ) -> String {
     let k = g.clusters.len();
@@ -293,7 +293,7 @@ fn invariants_line(
         }
         false
     };
-    let hit = |p: &mermaidlite_diagram::Rect, q: &mermaidlite_diagram::Rect| {
+    let hit = |p: &tidemap_diagram::Rect, q: &tidemap_diagram::Rect| {
         p.x < q.right() && q.x < p.right() && p.y < q.bottom() && q.y < p.bottom()
     };
     let (mut outside, mut intruder, mut sib, mut nest, mut lab) = (0, 0, 0, 0, 0);

@@ -1,5 +1,5 @@
 //! Preview tool:
-//! `cargo run --release -p mermaidlite-diagram --example render -- <in.mmd> <out.svg> [--dark] [--by-subgraph] [--embed-fonts] [--contrast]`
+//! `cargo run --release -p tidemap-diagram --example render -- <in.mmd> <out.svg> [--dark] [--by-subgraph] [--embed-fonts] [--contrast]`
 //!
 //! Renders a Mermaid flowchart to a styled SVG and prints counts, bounds,
 //! diagnostics and stage timings. `--embed-fonts` adds `@font-face` rules that
@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-use mermaidlite_diagram::style::contrast_ratio;
-use mermaidlite_diagram::{
+use tidemap_diagram::style::contrast_ratio;
+use tidemap_diagram::{
     ColorBy, Measurer, Metrics, Scene, StyleSheet, layout, parse, render, to_svg,
 };
 

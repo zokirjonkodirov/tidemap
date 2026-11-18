@@ -2,7 +2,7 @@ target/
 release/
 .DS_Store
 *.log
-.mermaidlite/
+.tidemap/
 .build-cache/
 *.pdb
 .superpowers/

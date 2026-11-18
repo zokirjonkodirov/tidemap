@@ -11,8 +11,8 @@ The production build and Windows x64 packaging completed successfully.
 
 Outputs:
 
-- `release/MermaidLite-0.1.0-win-x64.exe`: unsigned Windows installer.
-- `release/win-unpacked/MermaidLite.exe`: unpacked desktop application; keep the surrounding directory intact.
+- `release/Tidemap-0.1.0-win-x64.exe`: unsigned Windows installer.
+- `release/win-unpacked/Tidemap.exe`: unpacked desktop application; keep the surrounding directory intact.
 - `release/build-manifest.json`: artifact sizes and SHA-256 hashes.
 - `dist/` and `dist-electron/`: production frontend and native bundles.
 - `build-output.log` and `packaging-output.log`: build logs.

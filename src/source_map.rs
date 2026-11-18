@@ -6,8 +6,8 @@
 //! leading byte order mark. In Markdown a block's lines may carry a prefix (list indent,
 //! blockquote marker); the prefix exists in the file but not in `block.source`.
 
-use mermaidlite_diagram::Span;
-use mermaidlite_model::DiagramBlock;
+use tidemap_diagram::Span;
+use tidemap_model::DiagramBlock;
 
 /// Length in bytes of the byte order mark that the editor never shows.
 fn bom_len(file_content: &str) -> usize {
