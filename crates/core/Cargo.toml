@@ -1,0 +1,24 @@
+[package]
+name = "mermaidlite-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+mermaidlite-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+anyhow.workspace = true
+pulldown-cmark = "0.13"
+ignore = "0.4"
+notify = "8.2"
+directories = "6.0"
+tempfile = "3.23"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+

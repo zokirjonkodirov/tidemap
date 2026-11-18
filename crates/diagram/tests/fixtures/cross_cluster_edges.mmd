@@ -1,0 +1,28 @@
+flowchart LR
+  subgraph Frontend
+    Web[Web app]
+    Mobile[Mobile app]
+  end
+  subgraph Backend
+    Api[API server]
+    Auth[Auth service]
+    Jobs[Job runner]
+  end
+  subgraph Storage
+    Db[(Database)]
+    Files[(File store)]
+  end
+  subgraph Analytics
+    Events[Event stream]
+    Warehouse[(Warehouse)]
+  end
+  Web --> Api
+  Mobile --> Api
+  Web --> Auth
+  Api --> Db
+  Api --> Files
+  Jobs --> Db
+  Api --> Events
+  Events --> Warehouse
+  Auth --> Db
+  Jobs --> Events

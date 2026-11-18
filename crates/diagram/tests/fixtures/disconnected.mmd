@@ -1,0 +1,9 @@
+flowchart TB
+  A1[Alpha] --> A2[Beta] --> A3[Gamma]
+  B1[Login] --> B2{Valid?}
+  B2 -->|yes| B3[Dashboard]
+  B2 -->|no| B4[Error page]
+  C1[(Cache)] --> C2[Reader]
+  D1([Lonely node])
+  E1[Producer] --> E2[Queue] --> E3[Consumer]
+  F1[Left] --> F2[Right]

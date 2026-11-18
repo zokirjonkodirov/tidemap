@@ -1,0 +1,23 @@
+[package]
+name = "mermaidlite-renderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+mermaidlite-model.workspace = true
+mermaidlite-diagram.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+usvg = "=0.47.0"
+resvg = "=0.47.0"
+tiny-skia = "0.12"
+base64 = "0.22"
+
+
+[lints.cargo]
+unused_dependencies = "allow"

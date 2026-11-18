@@ -1,0 +1,119 @@
+flowchart TB
+  subgraph Client[Client applications]
+    Web[Web application - React SPA]
+    Mobile[Mobile app for iOS and Android]
+    CLI[Command line tool]
+    Partner[Partner integrations via public API]
+    SDK[Official client SDKs]
+    Embed[Embeddable widget]
+  end
+
+  subgraph Edge[Edge and security layer]
+    CDN[Global CDN with static asset caching]
+    WAF[Web application firewall]
+    LB[Load balancer]
+    Gateway[API gateway]
+    RateLimit{Rate limit exceeded?}
+    AuthCheck{Valid access token?}
+    Reject429[Return 429 too many requests]
+    Reject401[Return 401 unauthorized]
+  end
+
+  subgraph Services[Core application services]
+    AuthSvc[Authentication and session service]
+    UserSvc[User profile service]
+    BillingSvc[Billing and subscription service]
+    SearchSvc[Search and recommendation service]
+    ContentSvc[Content management service]
+    NotifySvc[Notification service]
+    FeatureFlags[Feature flag service]
+    Orchestrator[Workflow orchestrator]
+    CacheCheck{Result in cache?}
+  end
+
+  subgraph Data[Data and storage layer]
+    PrimaryDB[(Primary PostgreSQL cluster)]
+    ReadReplica[(Read replicas)]
+    Redis[(Redis cache)]
+    ObjectStore[(Object storage for uploads)]
+    SearchIndex[(Search index)]
+    Warehouse[(Analytics warehouse)]
+    Secrets[(Secrets manager)]
+  end
+
+  subgraph Async[Asynchronous processing]
+    Queue[[Message queue]]
+    Workers[Background job workers]
+    Scheduler[Scheduled task runner]
+    EmailWorker[Email delivery worker]
+    IndexWorker[Search indexing worker]
+    ETL[ETL pipeline]
+    DeadLetter[Dead letter queue]
+    RetryCheck{Retry attempts left?}
+  end
+
+  subgraph Observability[Observability and operations]
+    Logs[Centralised log aggregation]
+    Metrics[Metrics and dashboards]
+    Tracing[Distributed tracing]
+    Alerts[Alert manager]
+    OnCall[On-call paging]
+    Audit[Audit trail]
+  end
+
+  Web --> CDN
+  Mobile --> LB
+  CLI --> Gateway
+  Partner --> Gateway
+  SDK --> Gateway
+  Embed --> CDN
+  CDN --> WAF
+  WAF --> LB
+  LB --> Gateway
+  Gateway --> RateLimit
+  RateLimit -->|yes| Reject429
+  RateLimit -->|no| AuthCheck
+  AuthCheck -->|no| Reject401
+  AuthCheck -->|yes| Orchestrator
+  Reject429 -.-> Web
+  Reject401 -.-> Mobile
+  Orchestrator --> AuthSvc
+  Orchestrator --> UserSvc
+  Orchestrator --> BillingSvc
+  Orchestrator --> SearchSvc
+  Orchestrator --> ContentSvc
+  AuthSvc --> Secrets
+  AuthSvc --> Redis
+  UserSvc --> PrimaryDB
+  UserSvc --> ReadReplica
+  BillingSvc --> PrimaryDB
+  BillingSvc -->|invoice paid| Queue
+  SearchSvc --> CacheCheck
+  CacheCheck -->|hit| Redis
+  CacheCheck -->|miss| SearchIndex
+  ContentSvc --> ObjectStore
+  ContentSvc --> PrimaryDB
+  ContentSvc -->|content changed| Queue
+  FeatureFlags --> Orchestrator
+  PrimaryDB --> ReadReplica
+  Queue --> Workers
+  Scheduler --> Queue
+  Workers --> NotifySvc
+  Workers --> EmailWorker
+  Workers --> IndexWorker
+  Workers --> RetryCheck
+  RetryCheck -->|yes| Queue
+  RetryCheck -->|no| DeadLetter
+  IndexWorker --> SearchIndex
+  ETL --> Warehouse
+  PrimaryDB --> ETL
+  NotifySvc --> EmailWorker
+  Gateway -.-> Logs
+  Services -.-> Metrics
+  Services -.-> Tracing
+  Workers -.-> Logs
+  Metrics --> Alerts
+  Alerts --> OnCall
+  DeadLetter --> Alerts
+  Logs --> Audit
+  AuthSvc --> Audit

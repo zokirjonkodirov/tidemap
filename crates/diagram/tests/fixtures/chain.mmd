@@ -1,0 +1,9 @@
+flowchart TB
+  A[Receive order] --> B[Validate payload]
+  B --> C[Check inventory]
+  C --> D[Reserve stock]
+  D --> E[Charge payment]
+  E --> F[Create shipment]
+  F --> G[Send confirmation]
+  G --> H[Archive order]
+  H --> I([Done])

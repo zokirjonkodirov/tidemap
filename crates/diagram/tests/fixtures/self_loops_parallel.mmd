@@ -1,0 +1,20 @@
+flowchart TB
+  Idle[Idle] --> Running[Running]
+  Running --> Running
+  Running -->|pause| Paused[Paused]
+  Paused -->|resume| Running
+  Running -->|ok| Done([Done])
+  Running -->|error| Failed[Failed]
+  Failed -->|retry| Running
+  Failed -->|retry later| Running
+  Failed --> Failed
+  Idle --> Done
+  Idle -->|skip| Done
+  Paused --> Paused
+  Done --> Idle
+  Done --> Audit[(Audit log)]
+  Audit --> Audit
+  Failed --> Alert[Notify on-call]
+  Alert -->|ack| Ack[Acknowledged]
+  Alert -->|ack| Ack
+  Ack --> Idle

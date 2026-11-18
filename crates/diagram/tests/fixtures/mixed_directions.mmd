@@ -1,0 +1,14 @@
+flowchart TB
+  subgraph Pipeline[Processing pipeline]
+    direction LR
+    In[Ingest] --> Parse[Parse] --> Enrich[Enrich] --> Out[Emit]
+  end
+  subgraph Sidecar[Monitoring]
+    direction RL
+    Probe[Probe] --> Collect[Collect] --> Alert[Alert]
+  end
+  Client[Client] --> In
+  Out --> Store[(Store)]
+  Store --> Report[Report builder]
+  Pipeline -.-> Probe
+  Report --> Mail[Email digest]

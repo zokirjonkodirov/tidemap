@@ -1,0 +1,23 @@
+flowchart TB
+  classDef brand fill:#2F5BEA,stroke:#1E3FA8,color:#ffffff
+  classDef warm fill:#FFD9A8,stroke:#D98A2B
+
+  subgraph Intake[Intake stage]
+    Start([Start]) --> Rect[Rectangle]:::brand
+    Rect --> Round(Rounded)
+    Round --> Sub[[Subroutine]]:::warm
+  end
+  Sub --> Check{Valid?}
+  Check -->|yes| Store[(Database)]
+  Check -->|no| Fail[Rejected]:::error
+  Fail -.-> Log[/Write log/]
+  subgraph Output[Output stage]
+    Store ==> Hex{{Prepare}}
+    Hex --> Circ((Ok))
+    Circ --x Para[\Reverse slant\]
+    Para --o Trap[/Trapezoid\]
+    Trap --> Alt[\Alt trapezoid/]
+    Alt --> Flag>Flag shape]
+    Flag --> Done(((Done)))
+  end
+  Log --> Hex

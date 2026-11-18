@@ -1,0 +1,15 @@
+flowchart TB
+  Draft[Draft] --> Review[Review]
+  Review --> Approved[Approved]
+  Review --> Changes[Changes requested]
+  Changes --> Draft
+  Approved --> Publish[Publish]
+  Publish --> Live[Live]
+  Live --> Update[Update needed]
+  Update --> Draft
+  Live --> Retire[Retire]
+  Retire --> Archive[(Archive)]
+  Archive --> Restore[Restore]
+  Restore --> Draft
+  Review --> Review2[Second review]
+  Review2 --> Review

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "status": "proposed-unmeasured",
+  "preparedDate": "2026-11-18",
+  "notes": "Initial acceptance budgets for a future benchmark harness. Not executable tests or measured results. See TEST_PLAN.md for reference machines, definitions, topology groups, observations and gates.",
+  "latencyPercentile": 95,
+  "metrics": [
+    { "id": "startup.cold.interactive", "unit": "ms", "max": 1000 },
+    { "id": "startup.warm.interactive", "unit": "ms", "max": 500 },
+    { "id": "workspace.warm.first_paths", "unit": "ms", "max": 150 },
+    { "id": "workspace.cold.first_paths", "unit": "ms", "max": 500, "corpus": "repo-release" },
+    { "id": "workspace.cold.metadata_complete", "unit": "ms", "max": 10000, "corpus": "repo-release" },
+    { "id": "search.input_to_results", "unit": "ms", "max": 50, "corpus": "repo-release" },
+    { "id": "switch.memory_cached.paint", "unit": "ms", "max": 100 },
+    { "id": "switch.small_uncached.paint", "unit": "ms", "max": 400 },
+    { "id": "switch.small_uncached_after_cancel.paint", "unit": "ms", "max": 1000, "includesHelperRestart": true },
+    { "id": "edit.everyday.last_input_to_paint", "unit": "ms", "max": 800, "includesDebounce": true },
+    { "id": "render.large.full_pipeline", "unit": "ms", "max": 3000 },
+    { "id": "render.huge.full_pipeline", "unit": "ms", "max": 15000 },
+    { "id": "ui.input_to_feedback", "unit": "ms", "max": 50 },
+    { "id": "cancel.input_to_feedback", "unit": "ms", "max": 50 },
+    { "id": "cancel.process_tree_cleanup", "unit": "ms", "max": 500 },
+    { "id": "frame.standard", "unit": "ms", "max": 16.7 },
+    { "id": "frame.huge", "unit": "ms", "max": 33.3 },
+    { "id": "memory.idle.process_tree", "unit": "MiB", "max": 180, "aggregation": "peak_in_idle_window" },
+    { "id": "memory.ordinary.process_tree", "unit": "MiB", "max": 350, "aggregation": "peak" },
+    { "id": "memory.huge.process_tree", "unit": "MiB", "max": 1024, "aggregation": "peak" },
+    { "id": "cpu.idle.one_core", "unit": "percent", "maxExclusive": 1, "aggregation": "mean_over_60_seconds" },
+    { "id": "package.compressed", "unit": "MiB", "max": 35, "aggregation": "archive_size", "excludes": "separately disclosed platform runtime prerequisites" }
+  ],
+  "corpora": [
+    { "id": "repo-small", "entries": 1000, "eligibleFiles": 100, "diagramBlocks": 500 },
+    { "id": "repo-release", "entries": 100000, "eligibleFiles": 10000, "diagramBlocks": 50000 },
+    { "id": "repo-stress", "entries": 1000000, "eligibleFiles": 100000, "gate": "bounded-failure-and-recovery" },
+    { "id": "graph-small", "family": "flowchart", "nodes": 20, "edges": 40 },
+    { "id": "graph-everyday", "family": "flowchart", "nodes": 200, "edges": 400 },
+    { "id": "graph-large", "family": "flowchart", "nodes": 1000, "edges": 2000 },
+    { "id": "graph-huge", "family": "flowchart", "nodes": 10000, "edges": 20000, "gate": "faithful-full-preview-and-responsive-exploration" },
+    { "id": "graph-stress", "family": "flowchart", "nodes": 50000, "edges": 100000, "gate": "bounded-failure-and-recovery" }
+  ],
+  "releaseObservations": { "startupMinimum": 50, "ordinaryMinimum": 100, "hugeMinimum": 100 },
+  "timeoutsMs": { "standard": 3000, "large": 8000, "huge": 20000, "explicitExtendedRetry": 60000 },
+  "cacheBudgetsMiB": { "decodedArtifacts": 96, "disk": 512 },
+  "requirements": {
+    "includeFailuresAndTimeouts": true,
+    "measureCorrectRevisionPaint": true,
+    "measureEntireProcessTree": true,
+    "reportPerTopologyAndFamily": true,
+    "sharedCiIsNotReferenceHardware": true
+  }
+}

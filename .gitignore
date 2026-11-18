@@ -1,0 +1,8 @@
+target/
+release/
+.DS_Store
+*.log
+.mermaidlite/
+.build-cache/
+*.pdb
+.superpowers/

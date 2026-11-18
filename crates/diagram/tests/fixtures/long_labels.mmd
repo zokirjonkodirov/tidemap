@@ -1,0 +1,9 @@
+flowchart TB
+  A[This is a deliberately long label that needs to wrap across several lines inside the node] --> B[Another fairly long label describing a step in the process]
+  B -->|an edge label that is also rather long| C[Short]
+  C --> D{Is the extremely verbose condition satisfied by the current input?}
+  D -->|yes, and this is a long answer| E[Continue with the main flow and write results to the output directory]
+  D -->|no| F[Stop]
+  E --> G[(A database with a long descriptive name for reporting)]
+  F --> G
+  G --> H[Final step]

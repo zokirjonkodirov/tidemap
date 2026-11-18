@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph Cloud[Cloud platform]
+    subgraph Region[Region eu-west]
+      subgraph Cluster[Kubernetes cluster]
+        Api[API pods] --> Worker[Worker pods]
+        Ingress[Ingress] --> Api
+      end
+      DB[(Postgres)]
+      Cache[(Redis)]
+    end
+    Registry[Image registry]
+    Secrets[Secret store]
+  end
+  subgraph Office[Office network]
+    Dev[Developer laptop]
+    CI[CI runner]
+  end
+  Worker --> DB
+  Api --> Cache
+  Dev --> CI
+  CI --> Registry
+  Registry --> Api
+  Secrets --> Api
+  User([Customer]) --> Ingress

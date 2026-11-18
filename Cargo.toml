@@ -1,0 +1,46 @@
+[workspace]
+members = [".", "crates/model", "crates/core", "crates/renderer", "crates/diagram", "tools/xtask"]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+license = "LicenseRef-Proprietary"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+sha2 = "0.10"
+anyhow = "1.0"
+mermaidlite-model = { path = "crates/model" }
+mermaidlite-diagram = { path = "crates/diagram" }
+
+[package]
+name = "mermaidlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "A native Rust workspace for Mermaid diagrams"
+default-run = "mermaidlite"
+
+[dependencies]
+mermaidlite-model.workspace = true
+mermaidlite-diagram.workspace = true
+mermaidlite-core = { path = "crates/core" }
+mermaidlite-renderer = { path = "crates/renderer" }
+eframe = { version = "=0.33.3", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+egui = { version = "=0.33.3", features = ["serde"] }
+rfd = "0.15"
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 8
+strip = "debuginfo"
+

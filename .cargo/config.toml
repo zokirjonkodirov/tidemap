@@ -1,0 +1,5 @@
+[build]
+jobs = 4
+
+[alias]
+native = "run --release --package mermaidlite-xtask --"

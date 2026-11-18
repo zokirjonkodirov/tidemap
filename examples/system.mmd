@@ -1,0 +1,10 @@
+flowchart TB
+  subgraph Workspace[Your local workspace]
+    Files[(Markdown and Mermaid)] --> Index[Project index]
+    Index --> Search[Find a diagram]
+    Search --> Editor[Source editor]
+  end
+  Editor --> Helper[Isolated renderer]
+  Helper --> Preview[Diagram canvas]
+  Editor --> Recovery[(Local recovery)]
+  Preview --> Export[SVG or PNG]

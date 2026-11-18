@@ -1,0 +1,13 @@
+flowchart LR
+  Src[Source code] --> Lint[Lint]
+  Src --> Build[Build]
+  Lint --> Test[Unit tests]
+  Build --> Test
+  Test --> Pkg[Package]
+  Pkg --> Scan{Vulnerabilities?}
+  Scan -->|none| Stage[Deploy to staging]
+  Scan -->|found| Fix[Open ticket]
+  Stage --> Smoke[Smoke tests]
+  Smoke --> Gate{Approved?}
+  Gate -->|yes| Prod([Production])
+  Gate -->|no| Roll[Roll back]

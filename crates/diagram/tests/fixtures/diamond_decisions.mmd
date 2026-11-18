@@ -1,0 +1,19 @@
+flowchart TB
+  Start([Request received]) --> D1{Authenticated?}
+  D1 -->|yes| D2{Has permission?}
+  D1 -->|no| Deny1[Reject 401]
+  D2 -->|yes| D3{Cached?}
+  D2 -->|no| Deny2[Reject 403]
+  D3 -->|yes| Serve[Serve from cache]
+  D3 -->|no| D4{Rate limited?}
+  D4 -->|yes| Deny3[Reject 429]
+  D4 -->|no| D5{Backend healthy?}
+  D5 -->|yes| D6{Payload valid?}
+  D5 -->|no| Fallback[Serve stale copy]
+  D6 -->|yes| D7{Needs approval?}
+  D6 -->|no| Deny4[Reject 422]
+  D7 -->|yes| D8{Approved?}
+  D7 -->|no| Run[Process request]
+  D8 -->|yes| Run
+  D8 -->|no| Deny5[Reject 409]
+  Run --> Serve
