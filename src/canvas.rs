@@ -75,6 +75,22 @@ impl Travel {
     }
 }
 
+/// The travel announced for one navigation: which way, and the diagram it leads to.
+type Announced = Option<(Travel, String)>;
+
+/// Takes the travel announced for `diagram` out of `pending`; any other announcement stays
+/// (an artifact for some other diagram, such as a re-render of the one being left, neither
+/// uses nor discards it). Unannounced diagrams are jumps.
+fn take_travel(pending: &mut Announced, diagram: &str) -> Travel {
+    pending.take_if(|(_, target)| target == diagram).map_or(Travel::Jump, |(travel, _)| travel)
+}
+
+/// The travel for opening `file`, given what a step announced: only a step into that very file
+/// counts, so a step that never opened anything cannot leak into an unrelated navigation.
+pub fn navigation_travel(announced: Option<(Travel, String)>, file: &str) -> Travel {
+    announced.filter(|(_, target)| target == file).map_or(Travel::Jump, |(travel, _)| travel)
+}
+
 /// Largest diagram (in nodes) that is kept to slide out; bigger ones just give way, so a
 /// transition never paints two heavy scenes.
 pub const OUTGOING_LIMIT: usize = 1500;
@@ -186,8 +202,8 @@ pub struct DiagramCanvas {
     diagram_id: String,
     /// The artifact painted last, to carry the selection over to a new layout.
     shown: Option<Arc<RenderArtifact>>,
-    /// Travel announced for the next diagram switch; `None` means a jump.
-    pending_travel: Option<Travel>,
+    /// Travel announced for the navigation to a diagram, until its artifact arrives.
+    pending_travel: Announced,
     /// Travel of the transition that is running (or ran last).
     travel: Travel,
     /// The diagram sliding out while the new one arrives.
@@ -339,17 +355,18 @@ impl DiagramCanvas {
         }
     }
 
-    /// Announces how the next different diagram is reached, for its transition. It is used by
-    /// the next switch and then forgotten, so unannounced switches are jumps.
-    pub fn set_travel(&mut self, travel: Travel) {
-        self.pending_travel = Some(travel);
+    /// Announces how the navigation to `diagram` (a block id) is made. Every navigation
+    /// announces its own travel, which replaces any earlier announcement, so none can leak into
+    /// a later switch; only the artifact of `diagram` uses it.
+    pub fn set_travel(&mut self, travel: Travel, diagram: &str) {
+        self.pending_travel = Some((travel, diagram.to_owned()));
     }
 
-    /// Travel of the switch now under way: the announced one until the new diagram arrives,
-    /// then the one its transition runs with. The top bar reads it to slide the breadcrumb the
-    /// same way.
+    /// Travel of the navigation now under way: the announced one until its diagram arrives,
+    /// then the one its transition runs with. The top bar reads it, in the frame the label
+    /// changes, to slide the breadcrumb the same way.
     pub fn travel(&self) -> Travel {
-        self.pending_travel.unwrap_or(self.travel)
+        self.pending_travel.as_ref().map_or(self.travel, |(travel, _)| *travel)
     }
 
     /// Whether the camera glides, the diagram transition runs, or dimming eases.
@@ -602,9 +619,8 @@ impl DiagramCanvas {
             self.bounds = Some(scene.bounds);
             self.painted_frames = 0;
             let previous = self.shown.take();
-            let announced = self.pending_travel.take();
             if different_diagram {
-                self.travel = announced.unwrap_or_default();
+                self.travel = take_travel(&mut self.pending_travel, &artifact.diagram_id);
                 self.outgoing = previous
                     .filter(|old| !fresh && keeps_outgoing(old.rendered.scene.nodes.len()))
                     .map(|artifact| Outgoing { artifact, camera: self.painted_camera, travel: self.travel });
@@ -1049,6 +1065,29 @@ mod tests {
     fn outgoing_scene_skipped_when_large() {
         assert!(keeps_outgoing(1500));
         assert!(!keeps_outgoing(1501));
+    }
+
+    #[test]
+    fn announced_travel_does_not_leak_into_other_navigation() {
+        // A forward step announced for file A that opened nothing; then a jump to file B.
+        let stale = Some((Travel::Forward, "A".to_owned()));
+        assert_eq!(navigation_travel(stale.clone(), "A"), Travel::Forward);
+        assert_eq!(navigation_travel(stale, "B"), Travel::Jump);
+        assert_eq!(navigation_travel(None, "B"), Travel::Jump);
+
+        // The canvas: a later navigation's announcement replaces the earlier one...
+        let mut canvas = DiagramCanvas::default();
+        canvas.set_travel(Travel::Forward, "a");
+        canvas.set_travel(Travel::Jump, "b");
+        assert_eq!(canvas.travel(), Travel::Jump);
+        assert_eq!(take_travel(&mut canvas.pending_travel, "b"), Travel::Jump);
+
+        // ...and only the announced diagram's artifact takes it.
+        let mut pending = Some((Travel::Back, "b".to_owned()));
+        assert_eq!(take_travel(&mut pending, "other"), Travel::Jump);
+        assert!(pending.is_some(), "a re-render of another diagram must not discard it");
+        assert_eq!(take_travel(&mut pending, "b"), Travel::Back);
+        assert!(pending.is_none());
     }
 
     #[test]

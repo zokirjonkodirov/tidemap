@@ -33,8 +33,8 @@ const LABEL_SHIFT: f32 = 6.0;
 /// What a crossfading label remembers between frames.
 #[derive(Clone)]
 struct LabelMemo {
-    /// What the label is about (the file or diagram shown); only a change of it animates.
-    key: String,
+    /// What the label is about (the file or diagram shown), hashed; only a change of it animates.
+    key: Id,
     /// The label's text, before any truncation.
     text: String,
     /// The text being replaced, while the crossfade runs.
@@ -65,15 +65,16 @@ impl Swapping {
         ctx: &Context,
         painter: &Painter,
         id: Id,
-        key: &str,
+        key: impl std::hash::Hash,
         text: &str,
         travel: Travel,
         font: &FontId,
         color: Color32,
         fit: &dyn Fn(&str) -> String,
     ) -> Self {
+        let key = Id::new(key);
         let mut memo = ctx.data(|data| data.get_temp::<LabelMemo>(id)).unwrap_or_else(|| LabelMemo {
-            key: key.to_owned(),
+            key,
             text: text.to_owned(),
             previous: None,
             direction: 0.0,
@@ -86,7 +87,7 @@ impl Swapping {
             }
             text.clone_into(&mut memo.text);
         }
-        key.clone_into(&mut memo.key);
+        memo.key = key;
         let t = if memo.previous.is_some() { motion::spring_from(ctx, id, 0.0, 1.0, motion::SOFT) } else { 1.0 };
         let old = memo.previous.as_deref().filter(|_| t < 1.0).map(|previous| painter.layout_no_wrap(fit(previous), font.clone(), color));
         if old.is_none() {
@@ -469,7 +470,7 @@ fn block_button(
         &ctx,
         ui.painter(),
         Id::new("crumb-block-swap"),
-        &format!("{} {}", app.active_file, app.active_block),
+        (&app.active_file, &app.active_block),
         label,
         travel,
         font,
