@@ -1093,6 +1093,12 @@ impl eframe::App for TidemapApp {
         egui::Rgba::from(theme::palette(self.dark).app).to_array()
     }
 
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        if self.shot.is_some() {
+            drop_typing(&mut raw_input.events);
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         static SLOWMO: std::sync::Once = std::sync::Once::new();
         SLOWMO.call_once(|| {
@@ -1138,6 +1144,17 @@ impl eframe::App for TidemapApp {
     }
 }
 
+/// Removes keyboard and text events so that a screenshot run is driven by its dev hooks alone:
+/// stray typing into the (real) window must not reach whichever widget has focus.
+fn drop_typing(events: &mut Vec<egui::Event>) {
+    events.retain(|event| {
+        !matches!(
+            event,
+            egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Ime(_) | egui::Event::Paste(_) | egui::Event::Copy | egui::Event::Cut
+        )
+    });
+}
+
 /// With `TIDEMAP_FRAME_LOG=1`, prints `frame <ms>` (the CPU time of the previous frame) to
 /// stderr for every frame in which something animates, so motion cost can be measured.
 fn log_frame(ctx: &egui::Context, frame: &eframe::Frame) {
@@ -1146,5 +1163,25 @@ fn log_frame(ctx: &egui::Context, frame: &eframe::Frame) {
         if let Some(seconds) = frame.info().cpu_usage {
             eprintln!("frame {:.2}", seconds * 1000.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod shot_input_tests {
+    use super::drop_typing;
+    use egui::{Event, Key, Modifiers, PointerButton, Pos2};
+
+    #[test]
+    fn screenshot_runs_ignore_typing_but_keep_the_pointer_and_screenshots() {
+        let mut events = vec![
+            Event::Text("sy".into()),
+            Event::Key { key: Key::S, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE },
+            Event::Paste("x".into()),
+            Event::PointerMoved(Pos2::ZERO),
+            Event::PointerButton { pos: Pos2::ZERO, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE },
+        ];
+        drop_typing(&mut events);
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0], Event::PointerMoved(_)));
     }
 }

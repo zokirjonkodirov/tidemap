@@ -88,10 +88,6 @@ cargo test --workspace run tests (9, all in crates/diagram)
 
 Motion follows the system's animation setting. The Motion row in Settings (System, Reduced, Full) overrides it; Reduced keeps fades but drops movement. The command palette has a Toggle reduced motion command.
 
-`TIDEMAP_SLOWMO=<n>` plays every animation `n` times slower, to inspect motion. `TIDEMAP_FRAME_LOG=1` prints `frame <ms>` to stderr for every frame in which something animates.
-
-Motion follows the system's animation setting. The Motion row in Settings (System, Reduced, Full) overrides it; Reduced keeps fades but drops movement. The command palette has a Toggle reduced motion command.
-
 ## Layout
 
 ```text

@@ -285,7 +285,10 @@ fn ramp_at(ctx: &Context, key: Id, target: f32) -> f32 {
         target,
         last: time,
     });
-    let reach = ((time - stored.last).max(0.0) as f32 / REDUCED_FADE).min(1.0);
+    // The gap is capped like a spring's: egui only runs frames on input, so the first frame
+    // after an idle stretch must not skip the whole fade.
+    let elapsed = ((time - stored.last).max(0.0) as f32).min(MAX_DT);
+    let reach = (elapsed / REDUCED_FADE).min(1.0);
     let gap = target - stored.state.value;
     stored.state = SpringState { value: stored.state.value + gap.clamp(-reach, reach), velocity: 0.0 };
     stored.target = target;
@@ -556,23 +559,33 @@ mod tests {
     }
 
     #[test]
+    fn presence_under_reduced_still_fades_after_an_idle_gap() {
+        let ctx = Context::default();
+        let id = Id::new("idle");
+        at(&ctx, 0.0, |c| { set_reduced(c, true); presence(c, id, false); });
+        let mut first = None;
+        at(&ctx, 5.0, |c| first = presence(c, id, true));
+        assert!(first.unwrap() < 1.0, "idle gap skipped the fade: {first:?}");
+    }
+
+    #[test]
     fn presence_under_reduced_ramps_linearly_over_a_short_fade() {
         let ctx = Context::default();
         let id = Id::new("pr");
         at(&ctx, 0.0, |c| { set_reduced(c, true); presence(c, id, true); });
         let mut early = None;
-        at(&ctx, 0.016, |c| early = presence(c, id, true));
+        at(&ctx, 0.025, |c| early = presence(c, id, true));
         assert!(early.unwrap() < 0.5, "must not jump in one frame: {early:?}");
         let mut mid = None;
-        at(&ctx, 0.075, |c| mid = presence(c, id, true));
-        assert!((mid.unwrap() - 0.5).abs() < 0.1, "linear halfway: {mid:?}");
+        for f in 2..=3 { at(&ctx, f as f64 * 0.025, |c| mid = presence(c, id, true)); }
+        assert!((mid.unwrap() - 0.5).abs() < 0.05, "linear halfway: {mid:?}");
         let mut done = None;
-        at(&ctx, 0.17, |c| done = presence(c, id, true));
+        for f in 4..=6 { at(&ctx, f as f64 * 0.025 + 0.001, |c| done = presence(c, id, true)); }
         assert_eq!(done, Some(1.0));
         let mut closing = Some(1.0);
-        at(&ctx, 0.2, |c| closing = presence(c, id, false));
+        at(&ctx, 0.18, |c| closing = presence(c, id, false));
         assert!(closing.unwrap() > 0.0);
-        at(&ctx, 0.4, |c| closing = presence(c, id, false));
+        for f in 8..=14 { at(&ctx, f as f64 * 0.025, |c| closing = presence(c, id, false)); }
         assert_eq!(closing, None);
     }
 }
