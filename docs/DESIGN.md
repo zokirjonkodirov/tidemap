@@ -4,11 +4,11 @@ Last updated 18 November 2026. The authoritative design is [`superpowers/specs/2
 
 ## 1. Character
 
-A quiet reading instrument. The diagram is the largest and strongest thing on screen. The shell is an inset, rounded set of cards on an off-white backdrop (near-black in dark mode), with one blue accent. Surfaces rise through four elevation levels (a fill, a contact shadow, a key shadow, a 1 px edge and, in dark mode, a 1 px top highlight); resize hairlines show only on hover or drag. Icons are painted vectors (`src/icons.rs`); no emoji or text glyphs are used as icons in the redesigned shell.
+A quiet reading instrument. The diagram is the largest and strongest thing on screen. The shell is a tinted frame: the window backdrop is a soft grey (near-black in dark mode) and the content (the diagram canvas, or the Markdown page) sits on an inset, rounded content card at the `Card` elevation, beside the sidebar, outline and source cards, with one blue accent. The chrome reads as the frame and the content as the sheet. Surfaces rise through four elevation levels (a fill, a contact shadow, a key shadow, a 1 px edge and, in dark mode, a 1 px top highlight); resize hairlines show only on hover or drag. Icons are painted vectors (`src/icons.rs`); no emoji or text glyphs are used as icons in the redesigned shell.
 
 The Miro reference informed spacing, clear routing, shape diversity and readable role colours. Its toolbars, collaboration chrome, branding and node palette are not reproduced.
 
-Layout, as built: a 40 px top bar (sidebar toggle, back and forward, breadcrumb, info, theme), a 260 px sidebar card with a virtualised tree, the canvas filling the rest (78.5% of a 1440x940 window), a floating pill for zoom, fit, source and export, a source card on the right that pushes the canvas, and a minimap that avoids the pill. Below 1000 px the sidebar is hidden and the source panel replaces the canvas. Source: `src/ui/`.
+Layout, as built: a 40 px top bar (sidebar toggle, back and forward, breadcrumb, info, theme), a 260 px sidebar card with a virtualised tree, the content card filling the rest, 8 px from the window edge and from neighbouring cards and hanging from the bar (about 77% of a 1440x940 window), a floating pill for zoom, fit, source and export, a source card on the right that pushes the canvas, and a minimap that avoids the pill. Below 1000 px the sidebar is hidden and the source panel replaces the canvas. Source: `src/ui/`.
 
 ## 2. Tokens
 
@@ -18,19 +18,19 @@ Values below were read from `src/theme.rs` and `crates/diagram/src/style.rs` on 
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `app` | `#FAFAF8` | `#1B1D20` | Window backdrop, canvas |
+| `app` | `#F1F2F4` | `#141619` | Window backdrop (the frame around the cards) |
 | `panel` | `#FFFFFF` | `#24272B` | Sidebar, source, popovers, pill |
 | `hover` | ink `#1F2328` at alpha 13 | white at alpha 15 | Row and button hover |
 | `ink` | `#1F2328` | `#E6E8EB` | Primary text |
 | `secondary` | `#5F6672` | `#A9B0BA` | Supporting text |
-| `muted` | `#6B7280` | `#98A1AC` | Hints, counts |
+| `muted` | `#636A76` | `#98A1AC` | Hints, counts |
 | `hairline` | ink at alpha 20 | white at alpha 20 | Divider shown on hover or drag |
 | `accent` | `#41609E` | `#8FAEE0` | Selection, primary actions, focus ring |
 | `accent_soft` | `#E9EEF7` | `#2A3447` | Active row, pressed controls |
 | `on_accent` | `#FFFFFF` | `#14181C` | Text on accent |
 | `danger` | `#A23B3B` | `#E19A9A` | Errors |
 
-Contrast measured in the tokens report (WCAG): all text pairs are at least 4.5:1; the lowest is light `muted` on `app` at 4.63. Elevated surfaces carry a 1 px edge; the 2 px accent keyboard focus ring is the only widget stroke.
+Contrast measured in the tokens report (WCAG): all text pairs are at least 4.5:1; light `muted` on the tinted `app` is the tightest pair and a test holds it at 4.5 or better. Elevated surfaces carry a 1 px edge; the 2 px accent keyboard focus ring is the only widget stroke.
 
 ### Diagram palette (`crates/diagram/src/style.rs`, `DiagramColors`)
 

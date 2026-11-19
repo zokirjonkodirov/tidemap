@@ -68,16 +68,15 @@ pub fn frame_mode(
     }
 }
 
-/// Canvas area (below the bar, beside the panels) as a fraction of the window area.
+/// Content card (below the bar, beside the panels) as a fraction of the window area. A side
+/// panel's width already includes its own backdrop gap; the card adds one on each side that has
+/// no panel, and one under it.
 pub fn canvas_fraction(window: Vec2, mode: FrameMode, sidebar_w: f32, source_w: f32) -> f32 {
     let mut width = window.x;
-    if mode.sidebar {
-        width -= sidebar_w;
+    for (open, panel_w) in [(mode.sidebar, sidebar_w), (mode.source == SourceMode::Side, source_w)] {
+        width -= if open { panel_w } else { token::INSET };
     }
-    if mode.source == SourceMode::Side {
-        width -= source_w;
-    }
-    let height = window.y - token::BAR_HEIGHT;
+    let height = window.y - token::BAR_HEIGHT - token::INSET;
     (width.max(0.0) * height.max(0.0)) / (window.x * window.y).max(1.0)
 }
 
@@ -121,9 +120,12 @@ pub fn frame(app: &mut TidemapApp, ctx: &Context) {
     }
 
     let mut canvas = screen;
+    // How far each side panel has opened: the content card's gap on that side shrinks to
+    // nothing as the panel's own gap takes over.
+    let reveal = (sidebar_t, source_t);
     egui::CentralPanel::default()
         .frame(Frame::NONE)
-        .show(ctx, |ui| canvas = central(app, ui, p, mode));
+        .show(ctx, |ui| canvas = central(app, ui, p, mode, reveal));
 
     if app.shot.is_some() && has_file && app.canvas.painted_frames == 3 {
         let share = canvas.area() / screen.area().max(1.0);
@@ -262,8 +264,16 @@ fn source_panel(app: &mut TidemapApp, ctx: &Context, p: Palette, t: f32) {
     }
 }
 
-/// The area between the panels. Returns the rectangle the pill is centred on.
-fn central(app: &mut TidemapApp, ui: &mut Ui, p: Palette, mode: FrameMode) -> Rect {
+/// Backdrop gap on the side of the content card that faces a panel (`reveal` is how far that
+/// panel has opened): the panel's own gap fills it once open.
+fn side_gap(reveal: f32) -> i8 {
+    (token::INSET * (1.0 - reveal.clamp(0.0, 1.0))).round() as i8
+}
+
+/// The area between the panels. Returns the rectangle the pill is centred on: the content card
+/// when a file is open, otherwise the whole area. `reveal` is how far the sidebar and the source
+/// panel have opened.
+fn central(app: &mut TidemapApp, ui: &mut Ui, p: Palette, mode: FrameMode, reveal: (f32, f32)) -> Rect {
     let area = ui.available_rect_before_wrap();
     if app.active_file.is_empty() {
         if app.workspace.is_none() {
@@ -281,6 +291,7 @@ fn central(app: &mut TidemapApp, ui: &mut Ui, p: Palette, mode: FrameMode) -> Re
     if app.outline_open {
         let margin = Margin {
             left: 0,
+            right: side_gap(reveal.1),
             ..inset_margin(token::INSET)
         };
         egui::SidePanel::right("diagram-outline")
@@ -290,13 +301,21 @@ fn central(app: &mut TidemapApp, ui: &mut Ui, p: Palette, mode: FrameMode) -> Re
             .frame(Frame::NONE)
             .show_inside(ui, |ui| card(ui, p, margin, |ui| states::outline(app, ui, p)));
     }
-    let canvas = ui.available_rect_before_wrap();
-    if app.document_view() {
-        app.show_document(ui, p);
-    } else {
-        canvas_view(app, ui, p);
-    }
-    canvas
+    // The outline card, when open, sits against the content card's right.
+    let margin = Margin {
+        left: side_gap(reveal.0),
+        right: if app.outline_open { token::INSET as i8 } else { side_gap(reveal.1) },
+        top: 0,
+        bottom: token::INSET as i8,
+    };
+    theme::content_card(ui, p, margin, |ui| {
+        if app.document_view() {
+            app.show_document(ui, p);
+        } else {
+            canvas_view(app, ui, p);
+        }
+    })
+    .0
 }
 
 /// The diagram of the active block, or a card or empty state when there is nothing to draw.

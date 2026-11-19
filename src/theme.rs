@@ -5,7 +5,7 @@
 //! type, elevation and the one-accent palette used by the native UI.
 use egui::{
     Color32, Context, CornerRadius, FontFamily, Frame, InnerResponse, Margin, Painter, Rect, RichText,
-    Shadow, Shape, Stroke, StrokeKind, Ui, Visuals, vec2,
+    Shadow, Shape, Stroke, StrokeKind, Ui, Visuals, epaint::Vertex, vec2,
 };
 use tidemap_model::Theme;
 
@@ -100,7 +100,7 @@ pub fn over(top: Color32, bottom: Color32) -> Color32 {
 
 pub fn palette(dark: bool) -> Palette {
     if dark {
-        let app = rgb(0x1B, 0x1D, 0x20);
+        let app = rgb(0x14, 0x16, 0x19);
         Palette {
             dark: true,
             app,
@@ -122,7 +122,7 @@ pub fn palette(dark: bool) -> Palette {
         }
     } else {
         let ink = rgb(0x1F, 0x23, 0x28);
-        let app = rgb(0xFA, 0xFA, 0xF8);
+        let app = rgb(0xF1, 0xF2, 0xF4);
         Palette {
             dark: false,
             app,
@@ -130,7 +130,7 @@ pub fn palette(dark: bool) -> Palette {
             hover: alpha(ink, 13),
             ink,
             secondary: rgb(0x5F, 0x66, 0x72),
-            muted: rgb(0x6B, 0x72, 0x80),
+            muted: rgb(0x63, 0x6A, 0x76),
             hairline: alpha(ink, 20),
             accent: rgb(0x41, 0x60, 0x9E),
             accent_soft: rgb(0xE9, 0xEE, 0xF7),
@@ -267,6 +267,71 @@ pub fn elevated<R>(
     ui.painter().set(slot, Shape::Vec(shadow_shapes(&e, rect, radius)));
     paint_highlight(ui.painter(), rect, radius, &e);
     inner
+}
+
+/// Segments per quarter circle in a corner mask.
+const MASK_SEGMENTS: usize = 10;
+
+/// The four spots between `rect`'s square corners and its rounded corners, as meshes filled
+/// `color`. egui clips to rectangles only, so content painted square into a rounded card is
+/// trimmed by covering what pokes past the corners.
+fn corner_masks(rect: Rect, radius: f32, color: Color32) -> Vec<Shape> {
+    // (corner, direction of the two straight edges from it) for each corner, clockwise.
+    let corners = [
+        (rect.left_top(), vec2(1.0, 1.0)),
+        (rect.right_top(), vec2(-1.0, 1.0)),
+        (rect.right_bottom(), vec2(-1.0, -1.0)),
+        (rect.left_bottom(), vec2(1.0, -1.0)),
+    ];
+    corners
+        .iter()
+        .map(|&(corner, dir)| {
+            let centre = corner + dir * radius;
+            let vertex = |pos| Vertex { pos, uv: egui::epaint::WHITE_UV, color };
+            let mut mesh = egui::Mesh::default();
+            mesh.vertices.push(vertex(corner));
+            // The arc runs from the point on one straight edge to the point on the other.
+            for i in 0..=MASK_SEGMENTS {
+                let angle = std::f32::consts::FRAC_PI_2 * i as f32 / MASK_SEGMENTS as f32;
+                let (sin, cos) = angle.sin_cos();
+                mesh.vertices.push(vertex(centre - vec2(dir.x * sin, dir.y * cos) * radius));
+            }
+            for i in 1..=MASK_SEGMENTS as u32 {
+                mesh.add_triangle(0, i, i + 1);
+            }
+            Shape::mesh(mesh)
+        })
+        .collect()
+}
+
+/// A card at [`Level::Card`] that holds `add`, which paints a full-bleed background of its own
+/// (a canvas, a page). `margin` is the backdrop gap around the card. Because painting is
+/// clipped to rectangles, the corners are rounded by masking: after `add` has painted, the
+/// four corner spots are covered in the backdrop colour and the edge and highlight are drawn on
+/// top, so content never pokes past a corner and the edge is never overpainted. Returns the
+/// card's rectangle with `add`'s result.
+pub fn content_card<R>(
+    ui: &mut Ui,
+    p: Palette,
+    margin: Margin,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (Rect, R) {
+    let radius = token::RADIUS_PANEL;
+    let e = elevation(p, Level::Card);
+    let inner = Frame::NONE.outer_margin(margin).show(ui, |ui| {
+        let rect = ui.available_rect_before_wrap();
+        let slot = ui.painter().add(Shape::Noop);
+        let result = add(ui);
+        let painter = ui.painter();
+        painter.set(slot, Shape::Vec(shadow_shapes(&e, rect, radius)));
+        for mask in corner_masks(rect, radius, p.app) {
+            painter.add(mask);
+        }
+        painter.rect_stroke(rect, radius, e.edge, StrokeKind::Inside);
+        paint_highlight(painter, rect, radius, &e);
+        (rect, result)
+    });
+    inner.inner
 }
 
 /// WCAG 2.x contrast ratio between two colours (1 to 21). Alpha is ignored; composite with
@@ -420,6 +485,15 @@ mod tests {
             for level in [Level::Card, Level::Raised, Level::Overlay, Level::Modal] {
                 assert!(contrast(p.muted, elevation(p, level).fill) >= 4.5);
             }
+        }
+    }
+
+    #[test]
+    fn muted_reads_on_tinted_backdrop() {
+        for dark in [false, true] {
+            let p = palette(dark);
+            assert!(contrast(p.muted, p.app) >= 4.5);
+            assert!(contrast(p.secondary, p.app) >= 4.5);
         }
     }
 
