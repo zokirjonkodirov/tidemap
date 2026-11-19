@@ -1,5 +1,7 @@
 # Research notes and decision basis
 
+> **Historical.** Research for the discarded Tauri/Electron/Mermaid.js stack, checked 18 November 2026. Not a basis for current decisions; see [ADR 001](decisions/001-implementation-runtime.md) and [ADR 002](decisions/002-own-diagram-engine.md).
+
 Checked on **18 November 2026** using primary project documentation. These references support library/platform facts. Product choices and speed targets in this package are proposed engineering decisions, not claims made by the libraries. Recheck exact versions when implementation begins.
 
 ## Desktop runtime

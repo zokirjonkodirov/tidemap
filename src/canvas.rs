@@ -115,6 +115,8 @@ pub struct DiagramCanvas {
     drag_velocity: Vec2,
     /// The camera is still where the last fit put it (no pan or zoom since).
     follow_fit: bool,
+    /// Pass number of the last frame this canvas painted, to tell a fresh appearance from a repaint.
+    last_pass: Option<u64>,
 }
 
 /// How quickly a fling slows down (per second, exponential).
@@ -147,6 +149,7 @@ impl Default for DiagramCanvas {
             fling: None,
             drag_velocity: Vec2::ZERO,
             follow_fit: false,
+            last_pass: None,
         }
     }
 }
@@ -458,8 +461,16 @@ impl DiagramCanvas {
             self.restore_pending = false;
         }
         self.shown = Some(artifact.clone());
+        // After being hidden (the page view) the canvas has no sensible camera to glide from:
+        // a fit then lands at once instead of sliding in from the corner.
+        let pass = ui.ctx().cumulative_pass_nr();
+        let fresh = self.last_pass.is_none_or(|last| pass > last + 2);
+        self.last_pass = Some(pass);
         if self.fit_pending {
             self.fit();
+            if fresh && let Some(anim) = self.anim.take() {
+                self.camera = anim.to;
+            }
         }
 
         let auto_minimap =

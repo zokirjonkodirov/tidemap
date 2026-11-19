@@ -40,12 +40,13 @@ pub enum Command {
     PreviousDiagram,
     FindInDiagram,
     ToggleOutline,
+    ToggleDocument,
     Settings,
     Shortcuts,
 }
 
 /// Command, title and shortcut text (empty when there is no shortcut), in display order.
-pub const COMMANDS: [(Command, &str, &str); 24] = [
+pub const COMMANDS: [(Command, &str, &str); 25] = [
     (Command::SwitchProject, "Switch project", "Ctrl+R"),
     (Command::Save, "Save", "Ctrl+S"),
     (Command::SaveCopy, "Save a copy", "Ctrl+Shift+S"),
@@ -62,6 +63,7 @@ pub const COMMANDS: [(Command, &str, &str); 24] = [
     (Command::PreviousDiagram, "Previous diagram", "["),
     (Command::FindInDiagram, "Find in diagram", "Ctrl+F"),
     (Command::ToggleOutline, "Show or hide the outline", "Ctrl+Shift+L"),
+    (Command::ToggleDocument, "Switch between the page and the diagram", "Ctrl+Shift+M"),
     (Command::ExportDiagram, "Export diagram", "Ctrl+Shift+X"),
     (Command::ToggleTheme, "Switch light or dark appearance", "Ctrl+Shift+D"),
     (Command::OpenFolder, "Open folder", "Ctrl+Shift+O"),
@@ -247,7 +249,9 @@ fn default_results(files: &[FileEntry], pins: &[String], recent: &[String], limi
 /// soon as the diagram was clicked.)
 pub fn typing(ctx: &Context) -> bool {
     let focused = ctx.memory(|memory| memory.focused());
-    focused.is_some_and(|id| egui::TextEdit::load_state(ctx, id).is_some())
+    focused.is_some_and(|id| {
+        egui::TextEdit::load_state(ctx, id).is_some() || crate::editor::focused_id(ctx) == Some(id)
+    })
 }
 
 /// Whether a bare key such as `F` may act as a shortcut: not while typing and not under a modal.
@@ -277,6 +281,7 @@ fn command_icon(command: Command, dark: bool) -> Icon {
         Command::ZoomIn => Icon::Plus,
         Command::ZoomOut => Icon::Minus,
         Command::ToggleOutline => Icon::File,
+        Command::ToggleDocument => Icon::Diagram,
         Command::ExportDiagram => Icon::Export,
         Command::ToggleTheme => {
             if dark {
@@ -325,6 +330,7 @@ fn chords() -> Vec<(Modifiers, Key, Action)> {
         (ctrl_shift, Key::X, Action::Command(Command::ExportDiagram)),
         (ctrl_shift, Key::D, Action::Command(Command::ToggleTheme)),
         (ctrl_shift, Key::L, Action::Command(Command::ToggleOutline)),
+        (ctrl_shift, Key::M, Action::Command(Command::ToggleDocument)),
         (ctrl, Key::P, Action::Palette("")),
         (ctrl, Key::K, Action::Palette("")),
         (ctrl, Key::R, Action::Projects),

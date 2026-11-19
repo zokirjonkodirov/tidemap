@@ -130,6 +130,8 @@ pub struct WorkspaceState {
     pub active_block_id: Option<String>,
     pub editor_open: bool,
     pub full_file: bool,
+    /// Markdown files open as a rendered page by default; true shows the diagram canvas instead.
+    pub diagram_view: bool,
     pub pins: Vec<String>,
     pub views: BTreeMap<String, ViewState>,
     pub selected_blocks: BTreeMap<String, String>,

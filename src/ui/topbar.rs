@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Width of the three right-hand buttons and the gaps between them.
-const RIGHT_CLUSTER: f32 = 3.0 * token::CONTROL + 2.0 * 4.0;
+const RIGHT_CLUSTER: f32 = 4.0 * token::CONTROL + 3.0 * 4.0;
 /// Space kept between the breadcrumb and the right-hand buttons.
 const RIGHT_GAP: f32 = token::SPACE[3];
 /// Height of the diagram button in the breadcrumb.
@@ -305,6 +305,18 @@ fn right_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     if icons::button(ui, icon, tooltip, false, true).clicked() {
         app.settings.theme = if app.dark { Theme::Light } else { Theme::Dark };
         app.save_settings();
+    }
+    let markdown = app.buffers.get(&app.active_file).is_some_and(|buffer| !buffer.document.name.to_lowercase().ends_with(".mmd"));
+    if markdown {
+        let page = app.document_view();
+        let (icon, tooltip) = if page {
+            (Icon::Diagram, "Show the diagram · Ctrl+Shift+M")
+        } else {
+            (Icon::File, "Show the page · Ctrl+Shift+M")
+        };
+        if icons::button(ui, icon, tooltip, false, true).clicked() {
+            app.toggle_document_view();
+        }
     }
     let info = icons::button(ui, Icon::Info, "Status and diagram notes", app.info_open, true);
     app.info_anchor = info.rect;

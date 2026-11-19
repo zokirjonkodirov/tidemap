@@ -1,5 +1,7 @@
 # Implementation plan
 
+> **Historical.** This plan targeted Tauri/Svelte and a proposed `apps/desktop` layout that was never built. The real layout is in the [README](../README.md); executed plans are in [superpowers/plans](superpowers/plans/).
+
 ## 1. Delivery strategy
 
 Build a benchmarked vertical slice before investing in the complete interface. Every phase produces a reviewable artifact and has explicit exit criteria. The core promise—large folders and large diagrams without freezing—is required for the first full release.

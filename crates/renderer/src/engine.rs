@@ -460,8 +460,9 @@ impl Worker {
                 diagram_id: request.diagram_id.clone(),
                 result,
             });
-            (self.wake)();
         }
+        // Background results only fill the cache; the page that asked repaints to pick them up.
+        (self.wake)();
     }
 
     /// Renders one job. `None` means it was canceled and nothing is reported.

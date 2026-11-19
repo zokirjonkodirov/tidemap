@@ -142,7 +142,7 @@ pub fn frame(app: &mut TidemapApp, ctx: &Context) {
         );
     }
     app.canvas_area = canvas;
-    if has_file {
+    if has_file && !app.document_view() {
         pill::show_pill(app, ctx, canvas, p);
     }
     states::search_overlay(app, ctx, canvas, p);
@@ -292,7 +292,11 @@ fn central(app: &mut TidemapApp, ui: &mut Ui, p: Palette, mode: FrameMode) -> Re
             .show_inside(ui, |ui| card(ui, p, margin, |ui| states::outline(app, ui, p)));
     }
     let canvas = ui.available_rect_before_wrap();
-    canvas_view(app, ui, p);
+    if app.document_view() {
+        app.show_document(ui, p);
+    } else {
+        canvas_view(app, ui, p);
+    }
     canvas
 }
 

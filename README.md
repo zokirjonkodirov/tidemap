@@ -14,6 +14,8 @@ Pure Rust: egui UI, in-house diagram engine. No Electron, WebView, JavaScript or
 ## Features
 
 - Open a folder: file tree, search, pins, recent projects, multiple diagrams per Markdown file.
+- Markdown files open as a rendered page: headings, lists, tables, quotes, code, links, selectable text, and every Mermaid block drawn inline (double-click one to open it, `Ctrl+Shift+M` switches views).
+- Source editor built for big files: only visible lines are laid out, so typing, selecting and moving cost the same in a 400,000-line file as in a 10-line one. Undo/redo, word and line selection, multi-line indent, line move/delete, list continuation, find with next/previous.
 - Live preview while typing; last good picture kept on syntax errors.
 - Click a node to highlight neighbours and jump to its source line, and vice versa.
 - Pan, zoom, fit, minimap, outline, in-diagram search, light/dark.
@@ -64,6 +66,7 @@ cargo native build     release build
 cargo native run       open the app
 cargo native package   portable zip in release/
 cargo native bench     engine timings
+cargo test --workspace run tests (9, all in crates/diagram)
 ```
 
 - Windows: GNU or MSVC toolchain (GNU needs no Visual Studio; see [docs/BUILD_REPORT.md](docs/BUILD_REPORT.md)).
@@ -90,7 +93,7 @@ crates/core/     files, index, source maps, recovery
 crates/renderer/ render jobs, cache, SVG/PNG export
 crates/model/    shared types
 tools/xtask/     build, package, bench
-docs/            architecture, decisions, requirements
+docs/            index in docs/README.md: decisions, status, compatibility
 ```
 
 Fonts: Inter and IBM Plex Mono (SIL OFL). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

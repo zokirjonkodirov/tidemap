@@ -1,6 +1,6 @@
 # Compatibility
 
-Last updated 18 November 2026. This describes what the in-house engine (`crates/diagram`, see [ADR 002](decisions/002-own-diagram-engine.md)) accepts. It was written from `crates/diagram/src/parser.rs` and `lexer.rs`. It is not a tested compatibility matrix: no automated tests exist in this phase, and Mermaid.js parity has not been checked.
+Last updated 19 November 2026. This describes what the in-house engine (`crates/diagram`, see [ADR 002](decisions/002-own-diagram-engine.md)) accepts. It was written from `crates/diagram/src/parser.rs` and `lexer.rs`. It is not a tested compatibility matrix: automated tests cover layout (golden files) and threading only, and Mermaid.js parity has not been checked.
 
 ## Diagram families
 

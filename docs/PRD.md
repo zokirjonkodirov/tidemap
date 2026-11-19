@@ -1,5 +1,7 @@
 # Tidemap product requirements
 
+> **Partly historical.** Product intent and requirements still guide the work, but stack references (Tauri, WebView, Mermaid.js) predate the native decision. The implemented system is the native Rust/egui app with an in-house diagram engine: see [ADR 001](decisions/001-implementation-runtime.md), [ADR 002](decisions/002-own-diagram-engine.md) and the [README](../README.md). The ADRs win on conflict.
+
 **Version:** 0.1, proposed. **Date:** 18 November 2026.  
 **Primary user:** a developer or technical author whose repositories contain many Mermaid diagrams across Markdown and standalone Mermaid files.
 

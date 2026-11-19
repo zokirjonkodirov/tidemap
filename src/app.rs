@@ -54,7 +54,7 @@ pub fn should_show(new_diag_count:usize,have_clean_previous:bool,since_last_edit
 pub struct TidemapApp {
     pub(crate) core:Option<WorkspaceCore>, pub(crate) renderer:Engine, pub(crate) style:StyleSheet, pub(crate) shot:Option<ShotState>, pub(crate) settings:Settings, pub(crate) dark:bool,
     pub(crate) workspace:Option<WorkspaceSnapshot>,pub(crate) recents:Vec<RecentWorkspace>,pub(crate) recoveries:Vec<RecoveryRecord>,pub(crate) buffers:BTreeMap<String,Buffer>,
-    pub(crate) active_file:String,pub(crate) active_block:String,pub(crate) state:WorkspaceState,pub(crate) canvas:DiagramCanvas,pub(crate) editor:SourceEditor,
+    pub(crate) active_file:String,pub(crate) active_block:String,pub(crate) state:WorkspaceState,pub(crate) canvas:DiagramCanvas,pub(crate) editor:SourceEditor,pub(crate) docview:crate::markdown::view::DocView,
     pub(crate) source_text:String,pub(crate) editor_key:String,pub(crate) sidebar_open:bool,pub(crate) editor_open:bool,pub(crate) full_file:bool,
     pub(crate) tree_query:String,pub(crate) collapsed:BTreeSet<String>,pub(crate) palette_open:bool,pub(crate) palette_query:String,pub(crate) palette_index:usize,pub(crate) palette_fresh:bool,pub(crate) search_fresh:bool,pub(crate) info_anchor:egui::Rect,pub(crate) canvas_area:egui::Rect,
     pub(crate) diagram_search:String,pub(crate) search_open:bool,pub(crate) outline_open:bool,pub(crate) info_open:bool,pub(crate) dialog:Option<Dialog>,
@@ -109,7 +109,7 @@ impl TidemapApp {
         let shot_empty=options.shot.as_ref().is_some_and(|shot|shot.empty);
         let shot=options.shot.map(|shot|ShotState{path:shot.path,started:Instant::now(),requested:false,frames:0,select:shot.select,source:shot.source,dialog:shot.dialog,info:shot.info,palette:shot.palette,search:shot.search,outline:shot.outline});
         let mut app=Self {core,renderer,style,shot,settings,dark,workspace,recents,recoveries,buffers:BTreeMap::new(),active_file:String::new(),active_block:String::new(),editor_open:state.editor_open,full_file:state.full_file,state,
-            canvas:DiagramCanvas::default(),editor:SourceEditor::default(),source_text:String::new(),editor_key:String::new(),sidebar_open:true,tree_query:String::new(),collapsed:BTreeSet::new(),palette_open:false,palette_query:String::new(),palette_index:0,palette_fresh:false,search_fresh:false,info_anchor:egui::Rect::NOTHING,canvas_area:egui::Rect::NOTHING,
+            canvas:DiagramCanvas::default(),editor:SourceEditor::default(),docview:Default::default(),source_text:String::new(),editor_key:String::new(),sidebar_open:true,tree_query:String::new(),collapsed:BTreeSet::new(),palette_open:false,palette_query:String::new(),palette_index:0,palette_fresh:false,search_fresh:false,info_anchor:egui::Rect::NOTHING,canvas_area:egui::Rect::NOTHING,
             diagram_search:String::new(),search_open:false,outline_open:false,info_open:false,dialog:None,recovery_file:None,conflict_file:None,toast:error.map(|text|(text,Instant::now())),search_hits:Vec::new(),search_key:(String::new(),String::new()),search_cursor:None,previews:HashMap::new(),diagnostics:HashMap::new(),pending_render:None,active_job:None,next_job:1,reads:HashMap::new(),generation:0,pending_restore,last_journal:None,last_persist:None,allow_close:false,font_ready:false,diagnostics_text:String::new(),workspace_revision:1,tree_cache:None,
             style_file,style_confirm:false,held:None,clean_seen:BTreeSet::new(),last_edit:Instant::now(),cursor_seen:None,prefetch_due:false,card_frames:0,export:ExportChoice{format:ExportFormat::Svg,scale:2,background:true,job:None},shot_open:None,shot_idle:false,
             palette_mode:ui::palette::PaletteMode::Files,tree_cursor:None,search_collapsed:BTreeSet::new(),pending_new:None,focus_request:None,sidebar_focused:false,appeared:HashMap::new(),workspace_settled:false};
@@ -159,7 +159,8 @@ impl TidemapApp {
     pub(crate) fn activate(&mut self,id:String,wanted:Option<String>,record:bool){
         let Some(buffer)=self.buffers.get_mut(&id)else{return;};buffer.last_used=Instant::now();
         self.active_file=id.clone();let wanted=wanted.or_else(||self.state.selected_blocks.get(&id).cloned());let wanted=wanted.and_then(|wanted|{if let Some(title)=wanted.strip_prefix("title\0"){buffer.document.blocks.iter().find(|block|block.title==title).map(|block|block.id.clone())}else if let Some(index)=wanted.strip_prefix("index\0"){index.parse::<usize>().ok().and_then(|index|buffer.document.blocks.get(index)).map(|block|block.id.clone())}else{Some(wanted)}});self.active_block=buffer.document.blocks.iter().find(|block|Some(&block.id)==wanted.as_ref()).or_else(||buffer.document.blocks.first()).map(|block|block.id.clone()).unwrap_or_default();
-        if buffer.document.blocks.is_empty(){self.editor_open=true;self.full_file=true;}
+        let page=!self.state.diagram_view&&!buffer.document.name.to_lowercase().ends_with(".mmd");
+        if buffer.document.blocks.is_empty()&&!page{self.editor_open=true;self.full_file=true;}
         self.state.selected_blocks.insert(id.clone(),self.active_block.clone());
         if record {self.state.history.truncate(self.state.history_index.saturating_add(1));if !self.state.history.last().is_some_and(|entry|entry.file_id==id&&entry.block_id==self.active_block){self.state.history.push(NavigationEntry{file_id:id,block_id:self.active_block.clone()});if self.state.history.len()>150{self.state.history.remove(0);}self.state.history_index=self.state.history.len().saturating_sub(1);}}
         self.canvas.restore_camera(self.state.views.get(&self.diagram_key()).and_then(|view|view.camera));self.canvas.selected=None;self.canvas.matches.clear();self.search_hits.clear();self.search_cursor=None;self.diagram_search.clear();self.editor_key.clear();self.sync_editor();self.schedule_render(false);self.record_state();self.prune_buffers();
@@ -175,13 +176,12 @@ impl TidemapApp {
     }
     pub(crate) fn sync_editor(&mut self){
         let key=format!("{}:{}",self.active_file,if self.full_file{"file"}else{&self.active_block});if key==self.editor_key{return;}
-        self.editor_key=key;self.cursor_seen=None;self.source_text=if self.full_file{self.buffers.get(&self.active_file).map(|buffer|buffer.document.content.trim_start_matches('\u{feff}').replace("\r\n","\n")).unwrap_or_default()}else{self.block().map(|block|block.source.replace("\r\n","\n")).unwrap_or_default()};
+        self.editor_key=key;self.cursor_seen=None;self.editor.reset();self.source_text=if self.full_file{self.buffers.get(&self.active_file).map(|buffer|buffer.document.content.trim_start_matches('\u{feff}').replace("\r\n","\n")).unwrap_or_default()}else{self.block().map(|block|block.source.replace("\r\n","\n")).unwrap_or_default()};
     }
     pub(crate) fn apply_source(&mut self){
         let Some(buffer)=self.buffers.get_mut(&self.active_file)else{return;};if buffer.document.read_only{return;}
-        let previous=buffer.document.blocks.clone();
         let content=if self.full_file{let text=if buffer.document.newline=="\r\n"{self.source_text.replace('\n',"\r\n")}else{self.source_text.clone()};Ok(if buffer.document.content.starts_with('\u{feff}'){format!("\u{feff}{text}")}else{text})}else{match buffer.document.blocks.iter().find(|block|block.id==self.active_block){Some(block)=>patch_diagram(&buffer.document.content,block,&self.source_text).map_err(|reason|reason.to_string()),None=>return}};
-        match content {Ok(content)=>{if content==buffer.document.content{return;}self.last_edit=Instant::now();buffer.document.content=content;buffer.revision+=1;buffer.last_used=Instant::now();buffer.document.blocks=extract_diagrams(&buffer.document.content,&buffer.document.path,&previous);if !buffer.document.blocks.iter().any(|block|block.id==self.active_block){self.active_block=buffer.document.blocks.first().map(|block|block.id.clone()).unwrap_or_default();}self.state.selected_blocks.insert(self.active_file.clone(),self.active_block.clone());self.last_journal=Some(Instant::now());self.schedule_render(false);},Err(reason)=>self.notify(reason)}
+        match content {Ok(content)=>{if content==buffer.document.content{return;}self.last_edit=Instant::now();buffer.document.content=content;buffer.revision+=1;buffer.last_used=Instant::now();let previous=std::mem::take(&mut buffer.document.blocks);buffer.document.blocks=extract_diagrams(&buffer.document.content,&buffer.document.path,&previous);if !buffer.document.blocks.iter().any(|block|block.id==self.active_block){self.active_block=buffer.document.blocks.first().map(|block|block.id.clone()).unwrap_or_default();}self.state.selected_blocks.insert(self.active_file.clone(),self.active_block.clone());self.last_journal=Some(Instant::now());self.schedule_render(false);},Err(reason)=>self.notify(reason)}
     }
     pub(crate) fn schedule_render(&mut self,retry:bool){
         let Some(block)=self.block()else{self.renderer.cancel();self.active_job=None;self.pending_render=None;return;};
@@ -452,6 +452,7 @@ impl TidemapApp {
             Command::FocusFiles => self.focus_sidebar(ui::sidebar::FocusTarget::Tree),
             Command::SearchFiles => self.focus_sidebar(ui::sidebar::FocusTarget::Search),
             Command::ToggleOutline => self.outline_open = !self.outline_open,
+            Command::ToggleDocument => self.toggle_document_view(),
         }
     }
 
@@ -547,6 +548,11 @@ impl TidemapApp {
     }
 
     pub(crate) fn open_search(&mut self) {
+        if self.document_view() {
+            // The page has no nodes to search: find text on the page itself.
+            self.docview.open_find();
+            return;
+        }
         self.search_open = true;
         self.search_fresh = true;
     }
@@ -959,6 +965,89 @@ impl TidemapApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
             if let Some(shot) = self.shot.as_mut() {
                 shot.requested = true;
+            }
+        }
+    }
+}
+
+
+impl TidemapApp {
+    /// Whether the center shows the rendered Markdown page instead of the diagram canvas.
+    pub(crate) fn document_view(&self) -> bool {
+        !self.state.diagram_view
+            && self.buffers.get(&self.active_file).is_some_and(|buffer| !buffer.document.name.to_lowercase().ends_with(".mmd"))
+    }
+
+    pub(crate) fn toggle_document_view(&mut self) {
+        let markdown = self.buffers.get(&self.active_file).is_some_and(|buffer| !buffer.document.name.to_lowercase().ends_with(".mmd"));
+        if !markdown {
+            self.notify("Only Markdown files have a page view");
+            return;
+        }
+        self.state.diagram_view = !self.state.diagram_view;
+        self.record_state();
+    }
+
+    /// Folder of the active document on disk. Workspace paths are stored relative to the root.
+    pub(crate) fn document_dir(&self) -> Option<std::path::PathBuf> {
+        let buffer = self.buffers.get(&self.active_file)?;
+        let path = std::path::Path::new(&buffer.document.path);
+        let full = match (&self.workspace, path.is_absolute()) {
+            (Some(workspace), false) => workspace.root.join(path),
+            _ => path.to_path_buf(),
+        };
+        full.parent().map(std::path::Path::to_path_buf)
+    }
+
+    /// Paints the rendered page of the active Markdown file and carries out what it asks for.
+    pub(crate) fn show_document(&mut self, ui: &mut egui::Ui, p: theme::Palette) {
+        use crate::markdown::view::{Action, Input};
+        let key = format!("doc:{}", self.active_file);
+        let saved_scroll = self.state.views.get(&key).map_or(0.0, |view| view.scroll);
+        let dir = self.document_dir();
+        let Some(buffer) = self.buffers.get(&self.active_file) else { return };
+        let input = Input {
+            file_id: &self.active_file,
+            content: &buffer.document.content,
+            dir: dir.as_deref(),
+            revision: buffer.revision,
+            blocks: &buffer.document.blocks,
+            active_block: &self.active_block,
+            p,
+            dark: self.dark,
+            style: &self.style,
+            saved_scroll,
+        };
+        let output = self.docview.show(ui, &input, &mut self.renderer, &mut self.next_job);
+        let view = self.state.views.entry(key).or_default();
+        view.scroll = output.scroll;
+        for action in output.actions {
+            match action {
+                Action::SelectDiagram(id) => self.select_block(id),
+                Action::OpenDiagram(id) => {
+                    self.select_block(id);
+                    self.state.diagram_view = true;
+                    self.record_state();
+                }
+                Action::OpenUrl(url) => ui.ctx().open_url(egui::OpenUrl::new_tab(url)),
+                Action::OpenPath(link) => {
+                    let target = link.split('#').next().unwrap_or("");
+                    if target.is_empty() {
+                        continue;
+                    }
+                    let base = dir.clone().unwrap_or_default();
+                    let full = base.join(target.replace('/', std::path::MAIN_SEPARATOR_STR));
+                    if full.is_file() {
+                        self.open_external(Some(full));
+                    } else {
+                        self.notify(format!("Cannot find {target}"));
+                    }
+                }
+                Action::EditLine(line) => {
+                    self.show_full_source();
+                    self.editor.jump_to_line(line);
+                }
+                Action::Copied => self.notify("Copied"),
             }
         }
     }

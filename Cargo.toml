@@ -33,10 +33,13 @@ tidemap-renderer = { path = "crates/renderer" }
 eframe = { version = "=0.33.3", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 egui = { version = "=0.33.3", features = ["serde"] }
 rfd = "0.15"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
+memchr = "2"
+unicode-segmentation = "1"
+pulldown-cmark = "0.13"
 
 [profile.release]
 opt-level = 3

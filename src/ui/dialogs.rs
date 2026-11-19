@@ -319,7 +319,7 @@ fn export_dialog(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
 // ---------------------------------------------------------------------------
 
 /// Groups of (action, key chord), in the order shown. Alternatives are separated by " or ".
-const SHORTCUT_GROUPS: [(&str, &[(&str, &str)]); 5] = [
+const SHORTCUT_GROUPS: [(&str, &[(&str, &str)]); 7] = [
     ("Go anywhere", &[
         ("Find a file or diagram", "Ctrl+P or Ctrl+K"),
         ("Run a command", "Ctrl+Shift+P"),
@@ -355,6 +355,23 @@ const SHORTCUT_GROUPS: [(&str, &[(&str, &str)]); 5] = [
         ("Save", "Ctrl+S"),
         ("Save a copy", "Ctrl+Shift+S"),
         ("Export diagram", "Ctrl+Shift+X"),
+    ]),
+    ("Source editor", &[
+        ("Select a word, a line", "Double click, triple click"),
+        ("Move by word", "Ctrl+Left or Ctrl+Right"),
+        ("Select to the start or end", "Shift+Home or Shift+End"),
+        ("Select all, select line", "Ctrl+A or Ctrl+L"),
+        ("Undo or redo", "Ctrl+Z or Ctrl+Y"),
+        ("Indent or outdent lines", "Tab or Shift+Tab"),
+        ("Move the lines up or down", "Alt+Up or Alt+Down"),
+        ("Delete the line", "Ctrl+Shift+K"),
+        ("Open a line below or above", "Ctrl+Enter or Ctrl+Shift+Enter"),
+    ]),
+    ("Page", &[
+        ("Switch between the page and the diagram", "Ctrl+Shift+M"),
+        ("Scroll", "Space, Page Up or Page Down"),
+        ("Open a diagram from the page", "Double click"),
+        ("Edit the text under the pointer", "Alt+Click"),
     ]),
     ("Window", &[
         ("Show or hide sidebar", "Ctrl+B"),

@@ -1,5 +1,7 @@
 # Test and benchmark plan
 
+> **Partly historical.** Written before implementation for a WebView stack. Current automated tests: 9 in `crates/diagram` (golden layout, parallel equals sequential, cancel flag, worker policy), run with `cargo test --workspace`. CI does not yet run them. Budgets in [benchmark-spec.json](benchmark-spec.json) remain targets; engine timings come from `cargo native bench`.
+
 **Status:** proposed; no app exists and no performance or native-platform tests have run. This plan defines what implementation must demonstrate. Machine-readable initial budgets are in [benchmark-spec.json](benchmark-spec.json).
 
 ## 1. Measurement contract

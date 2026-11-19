@@ -5,6 +5,7 @@ mod canvas;
 mod editor;
 mod export_cli;
 mod icons;
+mod markdown;
 mod motion;
 mod paint;
 mod source_map;
