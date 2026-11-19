@@ -53,6 +53,8 @@ const AHEAD_BUDGET_MS: f64 = 3.0;
 /// How often (in frames) laid-out leaves are checked for ones to forget, and how long unused
 /// ones are kept.
 const PRUNE_EVERY: u64 = 60;
+/// How many layout widths keep their measured heights.
+const RECENT_WIDTHS: usize = 3;
 const SLOT_IDLE_FRAMES: u64 = 120;
 
 const MAX_MATCHES: usize = 20_000;
@@ -150,6 +152,8 @@ pub struct DocView {
     tops: Vec<f32>,
     /// Measured heights by leaf and width, with the (rounded) width they were measured at.
     height_cache: HashMap<u64, (u32, f32)>,
+    /// The last few layout widths (rounded), newest first: the widths `height_cache` keeps.
+    recent_widths: Vec<u32>,
     slots: HashMap<u64, (Arc<Slot>, u64)>,
     /// The font-atlas epoch and display scale `slots` were laid out under.
     laid_out: (u64, f32),
@@ -200,6 +204,7 @@ impl Default for DocView {
             heights: Vec::new(),
             tops: vec![0.0],
             height_cache: HashMap::new(),
+            recent_widths: Vec::new(),
             slots: HashMap::new(),
             laid_out: (0, 0.0),
             artifacts: HashMap::new(),
@@ -686,6 +691,7 @@ impl DocView {
         }
         if laid_out.1 != self.laid_out.1 {
             self.height_cache.clear();
+            self.recent_widths.clear();
             self.width = 0.0;
             self.settle = WidthSettle::default();
         }
@@ -727,9 +733,13 @@ impl DocView {
             .iter()
             .map(|leaf| self.cached_height(leaf, width).unwrap_or_else(|| estimate(leaf, width)))
             .collect();
-        // Heights measured at other widths will not be wanted again at rest.
+        // Toggling a side panel goes back and forth between a few widths: keep those measured.
         let at = width.round() as u32;
-        self.height_cache.retain(|_, (w, _)| *w == at);
+        self.recent_widths.retain(|w| *w != at);
+        self.recent_widths.insert(0, at);
+        self.recent_widths.truncate(RECENT_WIDTHS);
+        let recent = &self.recent_widths;
+        self.height_cache.retain(|_, (w, _)| recent.contains(w));
         self.recompute_tops();
     }
 
@@ -2199,6 +2209,36 @@ mod tests {
     }
 
     #[test]
+    fn heights_for_recent_widths_come_from_the_cache() {
+        let mut rig = Harness::new(big_doc(150));
+        let settle_at = |rig: &mut Harness, window: f32| {
+            for _ in 0..3 {
+                rig.frame(window);
+            }
+        };
+        settle_at(&mut rig, 800.0);
+        let a = rig.view.width;
+        let measured: Vec<f32> = rig.view.heights[..8].to_vec();
+        let doc = rig.view.doc.clone();
+        assert!(
+            doc.leaves[..8].iter().zip(&measured).any(|(leaf, height)| (estimate(leaf, a) - height).abs() > 0.5),
+            "the check needs a measured height that differs from the estimate"
+        );
+        // Open a panel, then close it again: width A is back and needs no re-measuring.
+        settle_at(&mut rig, 700.0);
+        assert_ne!(rig.view.width, a);
+        rig.view.rebuild_heights(a);
+        assert_eq!(&rig.view.heights[..8], &measured[..], "heights for A came from the cache, not the estimate");
+        // Three more widths push the oldest one out.
+        for window in [600.0, 500.0, 400.0] {
+            settle_at(&mut rig, window);
+        }
+        assert_eq!(rig.view.recent_widths.len(), RECENT_WIDTHS);
+        assert!(rig.view.height_cache.values().all(|(w, _)| *w != a.round() as u32), "the oldest width's heights are gone");
+        assert!(rig.view.height_cache.values().any(|(w, _)| *w == rig.view.recent_widths[1]), "an older recent width keeps its heights");
+    }
+
+    #[test]
     fn page_caches_stay_bounded() {
         let mut rig = Harness::new(big_doc(150));
         rig.frame(900.0);
@@ -2217,7 +2257,8 @@ mod tests {
         let width = rig.view.width;
         assert!(rig.view.slots.len() <= leaves, "slots: {} for {leaves} leaves", rig.view.slots.len());
         assert!(rig.view.height_cache.len() <= leaves, "height cache: {} for {leaves} leaves", rig.view.height_cache.len());
-        assert!(rig.view.height_cache.values().all(|(w, _)| *w == width.round() as u32), "heights for an old width survived");
+        assert!(rig.view.height_cache.values().all(|(w, _)| rig.view.recent_widths.contains(w)), "heights for an old width survived");
+        assert_eq!(rig.view.recent_widths[0], width.round() as u32);
         assert!(rig.view.hscroll.is_empty() || rig.view.hscroll.len() <= leaves);
     }
 
