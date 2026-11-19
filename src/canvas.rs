@@ -696,7 +696,7 @@ impl DiagramCanvas {
             let galley = painter.layout_no_wrap(
                 "Zoom in for labels".to_owned(),
                 FontId::proportional(token::FONT_SMALL),
-                p.secondary.gamma_multiply(hint),
+                p.secondary,
             );
             let size = galley.size() + Vec2::new(20.0, 10.0);
             let rise = 6.0 * (1.0 - hint);
@@ -814,22 +814,22 @@ pub fn paint_card(
         .show(ui.ctx(), |ui| {
             let margin = egui::Margin::same(token::SPACE[4] as i8);
             theme::elevated(ui, p, theme::Level::Overlay, token::RADIUS_DIALOG, margin, |ui| {
-                    ui.set_max_width(((viewport.width() - 80.0).clamp(160.0, 400.0)).max(160.0));
-                    ui.label(
-                        egui::RichText::new(title)
-                            .size(token::FONT_TITLE)
-                            .strong()
-                            .color(p.ink),
-                    );
-                    ui.add_space(token::SPACE[1]);
-                    ui.label(
-                        egui::RichText::new(body)
-                            .size(token::FONT_UI)
-                            .color(p.secondary),
-                    );
-                    ui.add_space(token::SPACE[3]);
-                    pressed = ui.button(button).clicked();
-                });
+                ui.set_max_width(((viewport.width() - 80.0).clamp(160.0, 400.0)).max(160.0));
+                ui.label(
+                    egui::RichText::new(title)
+                        .size(token::FONT_TITLE)
+                        .strong()
+                        .color(p.ink),
+                );
+                ui.add_space(token::SPACE[1]);
+                ui.label(
+                    egui::RichText::new(body)
+                        .size(token::FONT_UI)
+                        .color(p.secondary),
+                );
+                ui.add_space(token::SPACE[3]);
+                pressed = ui.button(button).clicked();
+            });
         });
     pressed
 }

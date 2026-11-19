@@ -188,41 +188,41 @@ pub fn search_overlay(app: &mut TidemapApp, ctx: &Context, canvas: Rect, p: Pale
         .show(ctx, |ui| {
             let margin = Margin::symmetric(token::SPACE[2] as i8, token::SPACE[0] as i8);
             theme::elevated(ui, p, theme::Level::Raised, token::RADIUS_PILL, margin, |ui| {
-                    ui.spacing_mut().item_spacing.x = token::SPACE[1];
-                    ui.horizontal(|ui| {
-                        let (icon, _) = ui.allocate_exact_size(vec2(16.0, token::CONTROL), Sense::hover());
-                        icons::paint(ui.painter(), Icon::Search, Rect::from_center_size(icon.center(), vec2(16.0, 16.0)), p.muted);
-                        let edit = egui::TextEdit::singleline(&mut app.diagram_search)
-                            .id(Id::new("diagram-search-input"))
-                            .font(FontId::proportional(token::FONT_UI))
-                            .hint_text(RichText::new("Find in diagram").color(p.muted))
-                            .frame(false)
-                            .margin(Margin::ZERO)
-                            .desired_width(SEARCH_FIELD_WIDTH);
-                        let response = ui.add(edit);
-                        if app.search_fresh {
-                            app.search_fresh = false;
-                            response.request_focus();
-                        }
-                        if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
-                            next = true;
-                            response.request_focus();
-                        }
-                        let status = if !has_query {
-                            String::new()
-                        } else if count == 0 {
-                            "No matches".to_owned()
-                        } else {
-                            format!("{position} of {count}")
-                        };
-                        if !status.is_empty() {
-                            ui.label(RichText::new(status).size(token::FONT_SMALL).color(p.muted));
-                        }
-                        if icons::button(ui, Icon::Close, "Close search", false, true).clicked() {
-                            close = true;
-                        }
-                    });
+                ui.spacing_mut().item_spacing.x = token::SPACE[1];
+                ui.horizontal(|ui| {
+                    let (icon, _) = ui.allocate_exact_size(vec2(16.0, token::CONTROL), Sense::hover());
+                    icons::paint(ui.painter(), Icon::Search, Rect::from_center_size(icon.center(), vec2(16.0, 16.0)), p.muted);
+                    let edit = egui::TextEdit::singleline(&mut app.diagram_search)
+                        .id(Id::new("diagram-search-input"))
+                        .font(FontId::proportional(token::FONT_UI))
+                        .hint_text(RichText::new("Find in diagram").color(p.muted))
+                        .frame(false)
+                        .margin(Margin::ZERO)
+                        .desired_width(SEARCH_FIELD_WIDTH);
+                    let response = ui.add(edit);
+                    if app.search_fresh {
+                        app.search_fresh = false;
+                        response.request_focus();
+                    }
+                    if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                        next = true;
+                        response.request_focus();
+                    }
+                    let status = if !has_query {
+                        String::new()
+                    } else if count == 0 {
+                        "No matches".to_owned()
+                    } else {
+                        format!("{position} of {count}")
+                    };
+                    if !status.is_empty() {
+                        ui.label(RichText::new(status).size(token::FONT_SMALL).color(p.muted));
+                    }
+                    if icons::button(ui, Icon::Close, "Close search", false, true).clicked() {
+                        close = true;
+                    }
                 });
+            });
         });
     if next {
         app.focus_next_match();

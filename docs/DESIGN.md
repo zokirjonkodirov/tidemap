@@ -30,7 +30,7 @@ Values below were read from `src/theme.rs` and `crates/diagram/src/style.rs` on 
 | `on_accent` | `#FFFFFF` | `#14181C` | Text on accent |
 | `danger` | `#A23B3B` | `#E19A9A` | Errors |
 
-Contrast measured in the tokens report (WCAG): all text pairs are at least 4.5:1; the lowest is light `muted` on `app` at 4.63. Widgets draw no strokes; the only stroke is a 2 px accent keyboard focus ring.
+Contrast measured in the tokens report (WCAG): all text pairs are at least 4.5:1; the lowest is light `muted` on `app` at 4.63. Elevated surfaces carry a 1 px edge; the 2 px accent keyboard focus ring is the only widget stroke.
 
 ### Diagram palette (`crates/diagram/src/style.rs`, `DiagramColors`)
 
