@@ -31,8 +31,16 @@ const ICON_GAP: f32 = 6.0;
 const DOT: f32 = 6.0;
 /// How long a file that appeared on disk keeps its glow.
 const GLOW_SECONDS: f32 = 2.4;
-/// How long a folder takes to fold or unfold.
-const FOLD_SECONDS: f32 = 0.2;
+/// Seconds for `motion::step(GLIDE, ..)` to reach 0.999 (checked by a test).
+const FOLD_SETTLE: f32 = 0.56;
+/// Extra delay per revealed child when a folder unfolds, so the rows cascade.
+const FOLD_STAGGER: f32 = 0.012;
+/// Children beyond this many share the last delay, so a long folder does not drag.
+const FOLD_STAGGERED_ROWS: usize = 8;
+/// How long a folder takes to unfold: the settle time plus the longest stagger delay.
+const FOLD_SECONDS: f32 = FOLD_SETTLE + FOLD_STAGGER * FOLD_STAGGERED_ROWS as f32;
+/// How long a folder takes to fold: children leave together on `SNAP` (it reaches 0.999 by 0.24 s).
+const FOLD_CLOSE_SECONDS: f32 = 0.24;
 /// Above this many rows a fold is not animated (every row would be laid out each frame).
 const FOLD_ANIMATION_LIMIT: usize = 2500;
 /// Height of a tree row. Tighter than a control: a tree is read, not aimed at.
@@ -329,7 +337,7 @@ fn apply(app: &mut TidemapApp, ctx: &Context, actions: Actions) {
             set.insert(path.clone());
         }
         // The rows slide and fade as the folder folds or unfolds.
-        let start = ctx.input(|input| input.time);
+        let start = motion::now(ctx);
         ctx.data_mut(|data| data.insert_temp(Id::new(FOLD_ANIM), Fold { path, opening, start }));
         ctx.request_repaint();
     }
@@ -513,15 +521,29 @@ struct Display {
     animating: bool,
 }
 
+/// How far the `child`-th revealed child of a folding folder is shown after `elapsed` seconds.
+/// Opening cascades: each child starts `FOLD_STAGGER` after the one before it (up to
+/// `FOLD_STAGGERED_ROWS`) and glides in. Closing has no stagger and snaps away.
+fn fold_share(opening: bool, elapsed: f32, child: usize) -> f32 {
+    if opening {
+        let delay = child.min(FOLD_STAGGERED_ROWS) as f32 * FOLD_STAGGER;
+        motion::step(motion::GLIDE, elapsed - delay)
+    } else {
+        1.0 - motion::step(motion::SNAP, elapsed)
+    }
+}
+
 fn display(app: &TidemapApp, ctx: &Context, rows: &Arc<Vec<TreeRow>>) -> Display {
     let plain = || Display { rows: Arc::clone(rows), reveal: Vec::new(), animating: false };
-    let now = ctx.input(|input| input.time);
     let fold: Option<Fold> = ctx.data(|data| data.get_temp(Id::new(FOLD_ANIM)));
-    let Some(fold) = fold.filter(|fold| ((now - fold.start) as f32) < FOLD_SECONDS) else {
+    let Some(fold) = fold else {
         return plain();
     };
-    let progress = motion::ease_out(((now - fold.start) as f32 / FOLD_SECONDS).clamp(0.0, 1.0));
-    let share = if fold.opening { progress } else { 1.0 - progress };
+    let elapsed = (motion::now(ctx) - fold.start) as f32;
+    let duration = if fold.opening { FOLD_SECONDS } else { FOLD_CLOSE_SECONDS };
+    if motion::reduced(ctx) || elapsed >= duration {
+        return plain();
+    }
     let prefix = format!("{}/", fold.path);
     let shown: Arc<Vec<TreeRow>> = if fold.opening {
         Arc::clone(rows)
@@ -539,7 +561,18 @@ fn display(app: &TidemapApp, ctx: &Context, rows: &Arc<Vec<TreeRow>>) -> Display
     if shown.len() > FOLD_ANIMATION_LIMIT {
         return plain();
     }
-    let reveal = shown.iter().map(|row| if row.path.starts_with(&prefix) { share } else { 1.0 }).collect();
+    let mut child = 0;
+    let reveal = shown
+        .iter()
+        .map(|row| {
+            if !row.path.starts_with(&prefix) {
+                return 1.0;
+            }
+            let share = fold_share(fold.opening, elapsed, child);
+            child += 1;
+            share
+        })
+        .collect();
     ctx.request_repaint();
     Display { rows: shown, reveal, animating: true }
 }
@@ -633,13 +666,21 @@ fn list(app: &mut TidemapApp, ui: &mut Ui, p: Palette, rows: &Arc<Vec<TreeRow>>,
                 ui.scroll_to_rect(rect, None);
             }
         }
-        // The active row's fill glides when the open file changes or rows move; while a fold
-        // moves it simply stays on its row.
+        // The active row's band stretches to the open file's row; while a fold moves it simply
+        // stays on its row.
         if let Some(index) = active {
-            let duration = if shown.animating { 0.0 } else { motion::BASE };
-            let at = motion::tween(&ctx, Id::new(ACTIVE_BAND), top_of(index), duration, motion::ease_out);
+            let id = Id::new(ACTIVE_BAND);
             let height = TREE_ROW * shown.reveal.get(index).copied().unwrap_or(1.0);
-            let band = Rect::from_min_size(egui::pos2(ui.max_rect().left(), base + at), vec2(ui.available_width(), height));
+            let (top, bottom) = if shown.animating {
+                controls::restart_band(&ctx, id);
+                (top_of(index), top_of(index) + height)
+            } else {
+                controls::stretch_band(&ctx, id, top_of(index), top_of(index) + height)
+            };
+            let band = Rect::from_min_max(
+                egui::pos2(ui.max_rect().left(), base + top),
+                egui::pos2(ui.max_rect().left() + ui.available_width(), base + bottom),
+            );
             if ui.is_rect_visible(band) {
                 ui.painter().rect_filled(band, token::RADIUS_CONTROL, p.accent_soft);
             }
@@ -961,5 +1002,27 @@ impl TidemapApp {
             None if since.elapsed() > std::time::Duration::from_secs(8) => self.pending_new = None,
             None => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fold_duration_covers_the_slowest_child() {
+        assert!(motion::step(motion::GLIDE, FOLD_SETTLE) >= 0.999);
+        assert!(motion::step(motion::GLIDE, FOLD_SECONDS - FOLD_STAGGERED_ROWS as f32 * FOLD_STAGGER) >= 0.999);
+        assert!(motion::step(motion::SNAP, FOLD_CLOSE_SECONDS) >= 0.999);
+    }
+
+    #[test]
+    fn opening_cascades_and_closing_does_not() {
+        let t = 0.1;
+        assert!(fold_share(true, t, 0) > fold_share(true, t, 3));
+        assert_eq!(fold_share(true, t, 8), fold_share(true, t, 50));
+        assert_eq!(fold_share(false, t, 0), fold_share(false, t, 5));
+        assert!(fold_share(false, 0.0, 0) > 0.99);
+        assert!(fold_share(true, FOLD_SECONDS, 50) >= 0.999);
     }
 }

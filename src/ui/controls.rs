@@ -3,7 +3,7 @@
 //! The global egui visuals draw no widget strokes, so anything that has to read as a control
 //! (switch, segmented choice, key cap, button) is painted here from the palette.
 
-use egui::{Color32, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, emath::TSTransform, vec2};
+use egui::{Color32, Context, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, emath::TSTransform, vec2};
 
 use crate::motion;
 use crate::theme::{self, Palette, token};
@@ -134,6 +134,50 @@ pub fn switch(ui: &mut Ui, value: &mut bool) -> bool {
     changed
 }
 
+/// Where a band was last asked to be, and which way it was travelling.
+#[derive(Clone, Copy)]
+struct BandMemo {
+    /// The leading-axis start (top or left) the band last targeted.
+    target: f32,
+    /// Whether the band last moved toward larger values (down or right).
+    forward: bool,
+}
+
+fn band_memo_key(id: Id) -> Id {
+    id.with("band-memo")
+}
+
+/// A selection band that stretches as it travels: the edge on the side of travel chases its
+/// target quickly ([`motion::SNAP`]) while the trailing edge follows slowly ([`motion::SOFT`]),
+/// so the band elongates in motion and contracts on arrival.
+///
+/// `top` and `bottom` are the target edges in any unit (points, row indices; for a horizontal
+/// band pass left and right). Returns the band's current `(top, bottom)` in the same unit. The
+/// first call, and the first call after [`restart_band`], returns the target exactly.
+pub fn stretch_band(ctx: &Context, id: Id, top: f32, bottom: f32) -> (f32, f32) {
+    let key = band_memo_key(id);
+    let memo = ctx.data(|data| data.get_temp::<BandMemo>(key));
+    let forward = match memo {
+        Some(memo) if memo.target == top => memo.forward,
+        Some(memo) => top > memo.target,
+        None => true,
+    };
+    ctx.data_mut(|data| data.insert_temp(key, BandMemo { target: top, forward }));
+    let (leading, trailing) = (motion::SNAP, motion::SOFT);
+    let (top_feel, bottom_feel) = if forward { (trailing, leading) } else { (leading, trailing) };
+    (
+        motion::spring(ctx, id.with("top"), top, top_feel),
+        motion::spring(ctx, id.with("bottom"), bottom, bottom_feel),
+    )
+}
+
+/// Resets a [`stretch_band`] so its next call snaps to its target instead of travelling.
+pub fn restart_band(ctx: &Context, id: Id) {
+    motion::restart(ctx, id.with("top"));
+    motion::restart(ctx, id.with("bottom"));
+    ctx.data_mut(|data| data.remove::<BandMemo>(band_memo_key(id)));
+}
+
 /// A segmented choice: a recessed track with the selected option as a raised segment.
 /// Options read left to right in the order given. Returns true when the choice changed.
 pub fn segmented<T: Copy + PartialEq>(
@@ -170,9 +214,8 @@ pub fn segmented<T: Copy + PartialEq>(
     if let Some(chosen) = chosen {
         let ctx = ui.ctx().clone();
         let id = track_response.id.with("segment-slide");
-        let left = motion::tween(&ctx, id.with("left"), lefts[chosen], motion::BASE, motion::ease_out);
-        let w = motion::tween(&ctx, id.with("width"), widths[chosen], motion::BASE, motion::ease_out);
-        let band = Rect::from_min_size(egui::pos2(left, track.top() + SEGMENT_PAD), vec2(w, SEGMENT_HEIGHT));
+        let (left, right) = stretch_band(&ctx, id, lefts[chosen], lefts[chosen] + widths[chosen]);
+        let band = Rect::from_min_size(egui::pos2(left, track.top() + SEGMENT_PAD), vec2(right - left, SEGMENT_HEIGHT));
         ui.painter().rect_filled(band, inner_radius, p.raised);
     }
 
@@ -235,6 +278,48 @@ pub fn key_caps(ui: &mut Ui, shortcut: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run_band(ctx: &Context, id: Id, time: f64, top: f32) -> (f32, f32) {
+        let mut out = (0.0, 0.0);
+        let _ = ctx.run(egui::RawInput { time: Some(time), ..Default::default() }, |c| {
+            out = stretch_band(c, id, top, top + 32.0);
+        });
+        out
+    }
+
+    #[test]
+    fn band_stretches_while_travelling_and_rests_exact() {
+        let ctx = Context::default();
+        let id = Id::new("band");
+        run_band(&ctx, id, 0.0, 0.0);
+        let (a, b) = run_band(&ctx, id, 0.05, 320.0);
+        assert!(b - a > 32.0, "no stretch: {a} {b}");
+        let mut rest = (0.0, 0.0);
+        for f in 4..120 {
+            rest = run_band(&ctx, id, f as f64 / 60.0, 320.0);
+        }
+        assert_eq!(rest, (320.0, 352.0));
+    }
+
+    #[test]
+    fn band_leads_with_the_edge_on_the_side_of_travel_when_moving_up() {
+        let ctx = Context::default();
+        let id = Id::new("band-up");
+        run_band(&ctx, id, 0.0, 320.0);
+        let (a, b) = run_band(&ctx, id, 0.05, 0.0);
+        assert!(b - a > 32.0, "no stretch: {a} {b}");
+        assert!(320.0 - a > 352.0 - b, "top should lead: {a} {b}");
+    }
+
+    #[test]
+    fn restarted_band_snaps_to_its_target() {
+        let ctx = Context::default();
+        let id = Id::new("band-restart");
+        run_band(&ctx, id, 0.0, 0.0);
+        run_band(&ctx, id, 0.05, 320.0);
+        restart_band(&ctx, id);
+        assert_eq!(run_band(&ctx, id, 0.1, 64.0), (64.0, 96.0));
+    }
 
     #[test]
     fn press_scale_spans_four_percent() {

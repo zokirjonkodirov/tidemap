@@ -50,8 +50,10 @@ struct Tween {
     easing: fn(f32) -> f32,
 }
 
-/// The motion clock: wall time divided by the slow-motion scale.
-fn now(ctx: &Context) -> f64 {
+/// The motion clock in seconds: input time divided by the slow-motion scale. Anything that
+/// times an animation itself (rather than through a spring) must read this clock so that
+/// `TIDEMAP_SLOWMO` slows it too.
+pub fn now(ctx: &Context) -> f64 {
     let time = ctx.input(|input| input.time);
     time / f64::from(time_scale(ctx))
 }

@@ -3,7 +3,7 @@
 use egui::{Align, Color32, Context, FontId, Id, Layout, Sense, UiBuilder, vec2};
 use tidemap_model::Theme;
 
-use super::{info, surface};
+use super::{controls, info, surface};
 use crate::{
     app::TidemapApp,
     icons::{self, Icon},
@@ -366,7 +366,7 @@ fn block_button(
             // Every opening starts on the active diagram, with the band already there.
             index = active;
             ctx.data_mut(|data| data.insert_temp(Id::new(MENU_FILE), app.active_file.clone()));
-            motion::restart(&ctx, Id::new(MENU_BAND));
+            controls::restart_band(&ctx, Id::new(MENU_BAND));
         }
     }
     // The button keeps its hovered look for as long as its menu is open.
@@ -451,7 +451,8 @@ fn block_menu(
         .fold(0.0_f32, f32::max);
     // Room for the padding on both sides, the check mark and the inset of the surface.
     let width = (widest + 2.0 * MENU_PAD + 24.0 + 2.0 * inset).clamp(*MENU_WIDTH.start(), *MENU_WIDTH.end());
-    let band_at = motion::spring(ctx, Id::new(MENU_BAND), *index as f32, motion::SOFT);
+    // In row units: the band's two edges, stretching as the selection travels.
+    let (band_top, band_bottom) = controls::stretch_band(ctx, Id::new(MENU_BAND), *index as f32, *index as f32 + 1.0);
     let mut picked = None;
     let area = egui::Area::new(id)
         .order(egui::Order::Foreground)
@@ -464,10 +465,10 @@ fn block_menu(
                 ui.set_width(width - 2.0 * inset);
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 egui::ScrollArea::vertical().max_height(MENU_MAX_HEIGHT).auto_shrink([false, true]).show(ui, |ui| {
-                    let top = ui.cursor().top() + band_at * MENU_ROW;
-                    let band = egui::Rect::from_min_size(
-                        egui::pos2(ui.max_rect().left(), top),
-                        vec2(ui.available_width(), MENU_ROW),
+                    let origin = ui.cursor().top();
+                    let band = egui::Rect::from_min_max(
+                        egui::pos2(ui.max_rect().left(), origin + band_top * MENU_ROW),
+                        egui::pos2(ui.max_rect().left() + ui.available_width(), origin + band_bottom * MENU_ROW),
                     );
                     ui.painter().rect_filled(band, token::RADIUS_CONTROL, p.accent_soft);
                     for (row, (block, title)) in open.blocks.iter().enumerate() {

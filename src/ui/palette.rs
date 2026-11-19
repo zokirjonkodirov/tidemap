@@ -7,7 +7,7 @@ use egui::{
 };
 use tidemap_model::{FileEntry, RecentWorkspace};
 
-use super::{controls::key_cap, surface};
+use super::{controls::{self, key_cap}, surface};
 use crate::{
     app::TidemapApp,
     icons::{self, Icon},
@@ -547,18 +547,18 @@ fn contents(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette, intera
     };
     if interactive && app.palette_fresh {
         // A fresh opening: the highlight starts on its row instead of gliding from the last one.
-        motion::restart(ctx, Id::new(HIGHLIGHT_ID));
+        controls::restart_band(ctx, Id::new(HIGHLIGHT_ID));
     }
     if back {
         // Backspace on an empty project query goes back to finding files.
         app.palette_mode = PaletteMode::Files;
         app.palette_index = 0;
-        motion::restart(ctx, Id::new(HIGHLIGHT_ID));
+        controls::restart_band(ctx, Id::new(HIGHLIGHT_ID));
     }
     let changed = input_row(app, ui, ctx, p, interactive);
     if changed {
         app.palette_index = 0;
-        motion::restart(ctx, Id::new(HIGHLIGHT_ID));
+        controls::restart_band(ctx, Id::new(HIGHLIGHT_ID));
     }
     let hits = current_results(app);
     let last = hits.len().saturating_sub(1);
@@ -687,17 +687,19 @@ fn result_list(app: &TidemapApp, ui: &mut Ui, p: Palette, hits: &[Hit], keyboard
     let mut chosen = None;
     let height = ROW_HEIGHT * hits.len().min(VISIBLE_ROWS) as f32;
     let ctx = ui.ctx().clone();
-    let at = motion::tween(&ctx, Id::new(HIGHLIGHT_ID), app.palette_index as f32, motion::FAST, motion::ease_out);
+    // In row units: the band's two edges, stretching as the selection travels.
+    let index = app.palette_index as f32;
+    let (band_top, band_bottom) = controls::stretch_band(&ctx, Id::new(HIGHLIGHT_ID), index, index + 1.0);
     egui::ScrollArea::vertical()
         .id_salt("palette-results")
         .max_height(height)
         .auto_shrink([false, true])
         .show_rows(ui, ROW_HEIGHT, hits.len(), |ui, range| {
-            let top = ui.cursor().top() + (at - range.start as f32) * ROW_HEIGHT;
+            let origin = ui.cursor().top() - range.start as f32 * ROW_HEIGHT;
             let inset = token::SPACE[1];
             let band = Rect::from_min_max(
-                egui::pos2(ui.max_rect().left() + inset, top),
-                egui::pos2(ui.max_rect().right() - inset, top + ROW_HEIGHT),
+                egui::pos2(ui.max_rect().left() + inset, origin + band_top * ROW_HEIGHT),
+                egui::pos2(ui.max_rect().right() - inset, origin + band_bottom * ROW_HEIGHT),
             );
             ui.painter().rect_filled(band, token::RADIUS_CONTROL, p.accent_soft);
             for index in range {

@@ -6,7 +6,7 @@ use egui::{
 };
 
 use super::{
-    controls::{primary_button, quiet_button},
+    controls::{self, primary_button, quiet_button},
     palette::elided,
 };
 use crate::{
@@ -267,7 +267,24 @@ pub fn outline(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     }
     let mut focus = None;
     ui.spacing_mut().item_spacing.y = 0.0;
+    // One band slides over the selected row (in row units), stretching as it travels.
+    let band_id = Id::new("outline-active-band");
+    let band = match ids.iter().position(|id| app.canvas.selected == Some(*id)) {
+        Some(row) => Some(controls::stretch_band(ui.ctx(), band_id, row as f32, row as f32 + 1.0)),
+        None => {
+            controls::restart_band(ui.ctx(), band_id);
+            None
+        }
+    };
     egui::ScrollArea::vertical().auto_shrink([false, false]).show_rows(ui, token::ROW_HEIGHT, ids.len(), |ui, range| {
+        if let Some((band_top, band_bottom)) = band {
+            let origin = ui.cursor().top() - range.start as f32 * token::ROW_HEIGHT;
+            let rect = Rect::from_min_max(
+                pos2(ui.max_rect().left(), origin + band_top * token::ROW_HEIGHT),
+                pos2(ui.max_rect().right(), origin + band_bottom * token::ROW_HEIGHT),
+            );
+            ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.accent_soft);
+        }
         for index in range {
             let id = ids[index];
             let Some(node) = scene.nodes.get(id.0 as usize) else {
@@ -289,15 +306,11 @@ pub fn outline(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     }
 }
 
-/// One 32 px outline row with the same look as a sidebar row.
+/// One 32 px outline row with the same look as a sidebar row (the active fill is the shared band).
 fn outline_row(ui: &mut Ui, p: Palette, text: &str, active: bool) -> bool {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), token::ROW_HEIGHT), Sense::click());
     let ctx = ui.ctx().clone();
-    let on = crate::motion::toggle(&ctx, response.id.with("active"), active, crate::motion::BASE);
     let hover = crate::motion::hover(&ctx, response.id, response.hovered() && !active);
-    if on > 0.0 {
-        ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.accent_soft.gamma_multiply(on));
-    }
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
