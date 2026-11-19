@@ -80,7 +80,7 @@ Diagram defaults: edge width 1.5, arrow size 7, node stroke 1, cluster tint 0.35
 | Fonts | Inter Regular (UI), Inter Medium (node labels), Inter SemiBold (cluster titles, emphasis), IBM Plex Mono (source). Bundled in `assets/fonts` under the OFL |
 | Heights | bar 40, row 32, control 32 px |
 | Widths | sidebar 260 (220 to 360), source 420 (min 280), inset 8 px |
-| Motion | Velocity-preserving springs (`src/motion.rs`): SNAP 0.16 s, SOFT 0.30 s, GLIDE 0.38 s, POP 0.34 s with a small overshoot; narrow-window breakpoint 1000 px |
+| Motion | Velocity-preserving springs (`src/motion.rs`): SNAP 0.16 s, SOFT 0.30 s, GLIDE 0.38 s, POP 0.34 s with a small overshoot; narrow-window breakpoint 1000 px. Reduced motion (Settings, or the OS animation flag): springs resolve at once, surfaces still fade over 0.15 s with no scale or slide, the camera lands without a glide |
 
 `src/theme.rs` still holds a block of legacy tokens (`FONT_DISPLAY`, `HEIGHT_TOOLBAR`, `WIDTH_SEGMENT`, `GUTTER_TOP`, `GUTTER_PANEL`) used by dialogs, the welcome screen and the info popover until those are restyled.
 

@@ -561,4 +561,15 @@ fn muted_reads_on_tinted_backdrop() {
 
 ## Acceptance results
 
-_Filled in by Task 9: p95 motion frame time, still paths, and anything deferred._
+Recorded by Task 9 (release build, 1440x940, Windows).
+
+**Frame log (smoke run, screenshot mode).** `TIDEMAP_FRAME_LOG=1 TIDEMAP_SHOT_DIALOG=settings TIDEMAP_SHOT_FOLDER=examples tidemap.exe examples/welcome.md`: 38 busy frames (the dialog entrance and the page-to-workspace settle), median 0.87 ms, p95 5.49 ms, max 22.19 ms. The max is the first frame after launch (font and layout warm-up), not steady-state motion. A run on `welcome.md` alone logged no busy frames (nothing animates once it settles). This is a smoke figure only; it is not the interactive budget below.
+
+**Stills** (all settled, light and dark) in `.superpowers/sdd/2026-11-19-plan-4-motion-and-depth/shots/`: `t9-workspace-{light,dark}.png`, `t9-palette-{light,dark}.png` (query `>motion`, shows the new Toggle reduced motion command), `t9-settings-{light,dark}.png` (new Motion row), `t9-info-{light,dark}.png`, `t9-source-{light,dark}.png`; frame log in `t9-frames.txt`. Nothing wrong seen. The Motion row's detail wraps to three lines at the dialog width and sits close to the Theme row.
+
+**Checks.** `cargo build` and `cargo test --workspace` warning-free; `rg "Popup::menu|selectable_label|ui\.button\(" src` prints nothing; no `motion::(tween|toggle|appear|FAST|BASE|PANEL|CAMERA)` left. Clippy is not installed for this toolchain, so it was not run.
+
+**Owner checks still outstanding.**
+- Interactive frame budget: toggle the sidebar x5, palette open/close x5, step diagrams x5, switch theme x2 with `TIDEMAP_FRAME_LOG=1`, then confirm p95 of the `frame` lines is at most 8 ms.
+- Slow-motion feel with `TIDEMAP_SLOWMO=4` across panels, dialogs, camera glides and the theme reveal.
+- Reduced motion in the real app: Settings > Motion > Reduced, and the Windows "Show animations" switch with the window refocused.
