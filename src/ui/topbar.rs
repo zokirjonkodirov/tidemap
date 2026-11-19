@@ -594,7 +594,7 @@ fn block_menu(
             theme::elevated(ui, p, theme::Level::Overlay, token::RADIUS_PANEL, egui::Margin::same(inset as i8), |ui| {
                 ui.set_width(width - 2.0 * inset);
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                egui::ScrollArea::vertical().max_height(MENU_MAX_HEIGHT).auto_shrink([false, true]).show(ui, |ui| {
+                controls::solid_scroll(ui, |ui| egui::ScrollArea::vertical().max_height(MENU_MAX_HEIGHT).auto_shrink([false, true]).show(ui, |ui| {
                     let origin = ui.cursor().top();
                     let band = egui::Rect::from_min_max(
                         egui::pos2(ui.max_rect().left(), origin + band_top * MENU_ROW),
@@ -614,7 +614,7 @@ fn block_menu(
                             picked = Some(block.clone());
                         }
                     }
-                });
+                }));
             });
         });
     (picked, area.response.rect)

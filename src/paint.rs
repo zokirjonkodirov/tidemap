@@ -57,8 +57,13 @@ pub struct Emphasis<'a> {
     pub strong_nodes: &'a [NodeId],
     pub strong_edges: &'a [tidemap_diagram::EdgeId],
     pub matches: &'a [NodeId],
+    /// The search hit the page's find is on: ringed at full strength, whatever the dimming.
+    pub current: Option<NodeId>,
     /// Progress of the dimming of everything else, 0 (none) to 1 (full).
     pub dim: f32,
+    /// The camera is at rest: labels are laid out at their exact size (crisp) instead of on the
+    /// glyph-size ladder that keeps a moving zoom from filling the font atlas.
+    pub settled: bool,
 }
 
 /// What a frame painted.
@@ -286,6 +291,8 @@ struct Frame<'a> {
     accent: Color32,
     canvas: Color32,
     selected: Option<NodeId>,
+    current: Option<NodeId>,
+    settled: bool,
     strong_nodes: Vec<u32>,
     strong_edges: Vec<u32>,
     matches: Vec<u32>,
@@ -394,7 +401,7 @@ impl Frame<'_> {
         if lines.is_empty() || px < MIN_TEXT_PX || c.a() == 0 {
             return;
         }
-        let (raster, scale) = text::raster(px);
+        let (raster, scale) = text::raster(px, self.settled);
         let first = center[1] - lines.len() as f32 * line_height / 2.0 + line_height / 2.0;
         for (i, line) in lines.iter().enumerate() {
             if line.is_empty() {
@@ -443,7 +450,7 @@ impl Frame<'_> {
             let px = CLUSTER_TITLE_SIZE * zoom;
             if px >= MIN_TEXT_PX {
                 let middle = self.view.pt([r.x + 12.0, r.y + zone / 2.0]);
-                let (raster, scale) = text::raster(px);
+                let (raster, scale) = text::raster(px, self.settled);
                 let galley = self.painter.layout_no_wrap(
                     c.title.clone(),
                     FontId::new(raster, theme::font_semibold()),
@@ -616,19 +623,11 @@ impl Frame<'_> {
     fn rings(&self, n: &NodeItem, level: Lod) {
         let selected = self.selected == Some(n.id);
         let matched = self.matches.binary_search(&n.id.0).is_ok();
-        if !selected && !matched {
+        let current = self.current == Some(n.id);
+        let Some(ring) = ring_color(self.accent, selected, matched, current, self.dim) else {
             return;
-        }
-        let zoom = self.view.zoom();
-        let ring = if selected && matched {
-            // The current search hit stands out on its own, with or without dimming.
-            self.accent
-        } else if selected {
-            // The ring fades in with the dimming of everything else.
-            self.accent.gamma_multiply(self.dim.max(0.05))
-        } else {
-            self.accent.gamma_multiply(0.6)
         };
+        let zoom = self.view.zoom();
         let stroke = Stroke::new(2.0_f32, ring);
         let offset = 3.0 / zoom;
         let grown = n.rect.inflate(offset);
@@ -802,6 +801,21 @@ fn node_stroke_px(paint: &Paint, zoom: f32) -> f32 {
     }
 }
 
+/// The colour of the ring around a node, if it has one. The current hit of the page's find is
+/// at full strength; a selection fades in with the dimming of everything else; other hits are
+/// ringed softly.
+fn ring_color(accent: Color32, selected: bool, matched: bool, current: bool, dim: f32) -> Option<Color32> {
+    if current {
+        Some(accent)
+    } else if selected {
+        Some(accent.gamma_multiply(dim.max(0.05)))
+    } else if matched {
+        Some(accent.gamma_multiply(0.6))
+    } else {
+        None
+    }
+}
+
 /// Paints the visible part of `scene`. `viewport` is the screen rectangle the camera maps
 /// world `(0, 0)` into at offset `(camera.x, camera.y)`. `scratch` is reused between frames.
 #[allow(clippy::too_many_arguments)]
@@ -855,6 +869,8 @@ pub fn paint_scene(
         accent,
         canvas: color(style.colors(dark).canvas),
         selected: emphasis.selected,
+        current: emphasis.current,
+        settled: emphasis.settled,
         strong_nodes,
         strong_edges,
         matches,
@@ -899,5 +915,28 @@ pub fn paint_scene(
         items: scratch.len(),
         texts: frame.texts,
         lod: level,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ACCENT: Color32 = Color32::from_rgb(200, 100, 20);
+
+    #[test]
+    fn canvas_search_rings_ease_with_the_dimming() {
+        // The canvas selects a node that is also a search hit: its ring fades in with the dim.
+        for dim in [0.0_f32, 0.5, 1.0] {
+            let ring = ring_color(ACCENT, true, true, false, dim).expect("a ring");
+            assert_eq!(ring, ACCENT.gamma_multiply(dim.max(0.05)), "dim {dim}");
+        }
+        assert_eq!(ring_color(ACCENT, false, true, false, 0.0), Some(ACCENT.gamma_multiply(0.6)));
+        assert_eq!(ring_color(ACCENT, false, false, false, 1.0), None);
+    }
+
+    #[test]
+    fn the_current_page_hit_is_ringed_at_full_strength_without_dimming() {
+        assert_eq!(ring_color(ACCENT, false, true, true, 0.0), Some(ACCENT));
     }
 }

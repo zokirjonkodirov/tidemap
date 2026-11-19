@@ -10,7 +10,7 @@ use tidemap_renderer::export;
 
 pub use super::controls::{danger_button, primary_button, quiet_button};
 use super::{
-    controls::{key_caps, segmented, switch},
+    controls::{key_caps, segmented, solid_scroll, switch},
     surface,
 };
 use crate::{
@@ -198,20 +198,11 @@ fn actions(ui: &mut Ui, add_buttons: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// Space kept between scrolled content and the scroll bar.
-const SCROLL_GAP: f32 = 6.0;
-
-/// A scroll area that never makes the dialog taller than the window. Its bar takes room of its
-/// own beside the content: egui's default floating bar reserves none and would sit over the
-/// right-aligned controls of every row.
+/// A scroll area that never makes the dialog taller than the window, with a bar of its own width
+/// beside the content (see [`solid_scroll`]).
 fn scroll(ui: &mut Ui, ctx: &Context, add_contents: impl FnOnce(&mut Ui)) {
     let height = (ctx.content_rect().height() - 2.0 * WINDOW_MARGIN - 120.0).max(160.0);
-    ui.scope(|ui| {
-        let scroll = &mut ui.spacing_mut().scroll;
-        *scroll = egui::style::ScrollStyle::solid();
-        scroll.bar_inner_margin = SCROLL_GAP;
-        egui::ScrollArea::vertical().max_height(height).auto_shrink([false, true]).show(ui, add_contents);
-    });
+    solid_scroll(ui, |ui| egui::ScrollArea::vertical().max_height(height).auto_shrink([false, true]).show(ui, add_contents));
 }
 
 // ---------------------------------------------------------------------------

@@ -894,15 +894,17 @@ impl DiagramCanvas {
         } else if dim <= 0.0 {
             self.fade = Fade::default();
         }
-        let emphasis = if active {
-            Emphasis { selected: self.selected, strong_nodes, strong_edges, matches: &self.matches, dim }
+        let mut emphasis = if active {
+            Emphasis { selected: self.selected, strong_nodes, strong_edges, matches: &self.matches, current: None, dim, settled: false }
         } else {
             Emphasis {
                 selected: self.fade.selected,
                 strong_nodes: &self.fade.nodes,
                 strong_edges: &self.fade.edges,
                 matches: &self.matches,
+                current: None,
                 dim,
+                settled: false,
             }
         };
         let progress = motion::spring_from(ui.ctx(), egui::Id::new(TRANSITION_ID), 0.0, 1.0, motion::GLIDE);
@@ -910,6 +912,13 @@ impl DiagramCanvas {
         if progress >= 1.0 {
             self.outgoing = None;
         }
+        // At rest, labels are laid out at their exact size; a zoom that changed since the last
+        // frame (wheel, pinch) shows the cheap ladder and asks for the frame that settles it.
+        let zoom_moved = self.camera.zoom != self.painted_camera.zoom;
+        if zoom_moved {
+            ui.ctx().request_repaint();
+        }
+        emphasis.settled = !self.is_animating() && !zoom_moved;
         // The leaving diagram goes underneath, without any selection emphasis.
         if let Some(out) = &self.outgoing {
             let opacity = 1.0 - motion::fade((2.0 * progress).min(1.0));
@@ -920,7 +929,7 @@ impl DiagramCanvas {
                     camera: Camera { x: out.camera.x + offset.x, y: out.camera.y + offset.y, ..out.camera },
                     opacity,
                 };
-                let plain = Emphasis { selected: None, strong_nodes: &[], strong_edges: &[], matches: &[], dim: 0.0 };
+                let plain = Emphasis { selected: None, strong_nodes: &[], strong_edges: &[], matches: &[], current: None, dim: 0.0, settled: false };
                 paint_layer(&painter, viewport, &layer, style, dark, p.accent, &plain, &mut self.scratch);
             }
         }

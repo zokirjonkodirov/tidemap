@@ -693,11 +693,9 @@ fn result_list(app: &TidemapApp, ui: &mut Ui, p: Palette, hits: &[Hit], keyboard
     // In row units: the band's two edges, stretching as the selection travels.
     let index = app.palette_index as f32;
     let (band_top, band_bottom) = controls::stretch_band(&ctx, Id::new(HIGHLIGHT_ID), index, index + 1.0);
-    egui::ScrollArea::vertical()
-        .id_salt("palette-results")
-        .max_height(height)
-        .auto_shrink([false, true])
-        .show_rows(ui, ROW_HEIGHT, hits.len(), |ui, range| {
+    let list = egui::ScrollArea::vertical().id_salt("palette-results").max_height(height).auto_shrink([false, true]);
+    controls::solid_scroll(ui, |ui| {
+        list.show_rows(ui, ROW_HEIGHT, hits.len(), |ui, range| {
             let origin = ui.cursor().top() - range.start as f32 * ROW_HEIGHT;
             let inset = token::SPACE[1];
             let band = Rect::from_min_max(
@@ -715,7 +713,8 @@ fn result_list(app: &TidemapApp, ui: &mut Ui, p: Palette, hits: &[Hit], keyboard
                     chosen = Some(hits[index].clone());
                 }
             }
-        });
+        })
+    });
     chosen
 }
 

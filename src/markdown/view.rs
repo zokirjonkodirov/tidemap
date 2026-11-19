@@ -58,6 +58,8 @@ const RECENT_WIDTHS: usize = 3;
 const SLOT_IDLE_FRAMES: u64 = 120;
 
 const MAX_MATCHES: usize = 20_000;
+/// Diagrams outside the usual window that find has drawn per frame at most.
+const FIND_DRAW_LEAVES: usize = 64;
 
 /// One match of find on the page. Char offsets count `char`s of the leaf's text.
 #[derive(Clone, Debug, PartialEq)]
@@ -303,8 +305,13 @@ fn well(p: Palette) -> Color32 {
     if p.ink.r() > 200 { theme::alpha(Color32::WHITE, 14) } else { p.field }
 }
 
+/// What a whole-pixel `width` adds to a leaf's hash in the keys of the page's caches.
+fn width_mix(width: u32) -> u64 {
+    u64::from(width).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
 fn key_of(leaf: &Leaf, width: f32) -> u64 {
-    leaf.hash ^ ((width.round() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+    leaf.hash ^ width_mix(width.round() as u32)
 }
 
 /// Decides which column width the page is laid out at while the space it is given changes.
@@ -313,7 +320,8 @@ fn key_of(leaf: &Leaf, width: f32) -> u64 {
 /// of the animation; laying everything out at each intermediate width would re-wrap every
 /// visible leaf and re-fit every embedded diagram for sizes that are never seen at rest. So the
 /// layout keeps its width until the available one has held still for [`Self::SETTLE_FRAMES`]
-/// frames in a row.
+/// frames in a row, or has been waited for [`Self::MAX_PENDING_FRAMES`] frames: a window dragged
+/// by its edge never holds still, and the page must follow it a few times a second.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct WidthSettle {
     /// The width the page is laid out at; zero before the first layout.
@@ -321,11 +329,15 @@ struct WidthSettle {
     /// The available width last seen, and how many frames in a row it has held.
     candidate: f32,
     stable_frames: u8,
+    /// Frames in a row the layout has differed from the available width.
+    pending_frames: u8,
 }
 
 impl WidthSettle {
     /// Frames the available width must hold before the layout follows it.
     const SETTLE_FRAMES: u8 = 2;
+    /// Frames a different width may wait before the layout follows it even while it still changes.
+    const MAX_PENDING_FRAMES: u8 = 8;
     /// Width differences below this are not a change (the slot keys round to whole pixels).
     const TOLERANCE: f32 = 0.5;
 
@@ -333,12 +345,11 @@ impl WidthSettle {
     /// width just changed (so heights must be rebuilt).
     fn next(&mut self, available: f32) -> (f32, bool) {
         if self.layout <= 0.0 {
-            *self = Self { layout: available, candidate: available, stable_frames: 0 };
+            *self = Self { layout: available, candidate: available, ..Self::default() };
             return (available, true);
         }
         if (available - self.layout).abs() <= Self::TOLERANCE {
-            self.candidate = self.layout;
-            self.stable_frames = 0;
+            *self = Self { layout: self.layout, candidate: self.layout, ..Self::default() };
             return (self.layout, false);
         }
         if (available - self.candidate).abs() <= Self::TOLERANCE {
@@ -347,8 +358,9 @@ impl WidthSettle {
             self.candidate = available;
             self.stable_frames = 1;
         }
-        if self.stable_frames >= Self::SETTLE_FRAMES {
-            *self = Self { layout: self.candidate, candidate: self.candidate, stable_frames: 0 };
+        self.pending_frames = self.pending_frames.saturating_add(1);
+        if self.stable_frames >= Self::SETTLE_FRAMES || self.pending_frames >= Self::MAX_PENDING_FRAMES {
+            *self = Self { layout: self.candidate, candidate: self.candidate, ..Self::default() };
             return (self.layout, true);
         }
         (self.layout, false)
@@ -358,6 +370,13 @@ impl WidthSettle {
     fn pending(&self) -> bool {
         (self.candidate - self.layout).abs() > Self::TOLERANCE
     }
+}
+
+/// Distance from the left edge of the page area to the text column: centred, but never closer
+/// than [`MARGIN_X`] to the edge, even while the layout width is wider than the space (during a
+/// resize); the overhang then goes off the right edge, which is clipped.
+fn column_offset(area: f32, width: f32) -> f32 {
+    ((area - width) * 0.5).max(MARGIN_X)
 }
 
 /// Moves the scroll position and its target together when the leaf at the top of the view
@@ -523,6 +542,9 @@ impl DocView {
             return;
         }
         let searched_anew = self.find.stamp.as_ref().is_none_or(|old| old.0 != stamp.0 || old.1 != stamp.1);
+        // When only diagrams changed, the hit the reader is on is found again by its leaf.
+        let was_on = if searched_anew { None } else { self.find.matches.get(self.find.current).map(Hit::leaf) };
+        let had_matches = !self.find.matches.is_empty();
         self.find.matches.clear();
         let needle = stamp.1.clone();
         self.find.stamp = Some(stamp);
@@ -540,7 +562,11 @@ impl DocView {
                     Some(artifact) if is_drawn(&artifact) => {
                         found.extend(artifact.rendered.scene.find(&needle).into_iter().map(|node| Hit::Node { leaf: index, node }));
                     }
-                    _ => found.extend(text_ranges(source, &needle).map(|(start, end)| Hit::Source { leaf: index, start, end })),
+                    // Shown as its source: the notice is text the reader can see.
+                    Some(_) => found.extend(text_ranges(source, &needle).map(|(start, end)| Hit::Source { leaf: index, start, end })),
+                    // Not drawn yet: the source is Mermaid syntax (keywords, arrows, ids), not what
+                    // the page will show. The labels are found once the diagram arrives.
+                    None => {}
                 },
                 _ => {}
             }
@@ -550,16 +576,39 @@ impl DocView {
             }
         }
         self.find.matches = found;
-        let moved = self.find.restart || self.find.current >= self.find.matches.len();
+        let remapped = was_on.map(|leaf| self.find.matches.iter().position(|hit| hit.leaf() >= leaf).unwrap_or(self.find.matches.len().saturating_sub(1)));
+        if let Some(current) = remapped {
+            self.find.current = current;
+        }
+        // The first match appearing (a diagram arrived) is brought into view like a new search.
+        let moved = self.find.restart || self.find.current >= self.find.matches.len() || (!searched_anew && !had_matches && !self.find.matches.is_empty());
         if moved {
             let top = self.tops.partition_point(|top| *top <= self.scroll_y).saturating_sub(1);
             self.find.current = self.find.matches.iter().position(|hit| hit.leaf() >= top).unwrap_or(0);
             self.find.restart = false;
         }
-        // A diagram arriving while the reader reads on must not pull the page back.
-        if searched_anew || moved {
+        // A diagram arriving while the reader reads on must not pull the page back; a reveal
+        // already under way only follows its hit to its new place in the list.
+        if searched_anew || moved || (remapped.is_some() && self.find.reveal.is_some()) {
             self.find.reveal = self.find.matches.get(self.find.current).cloned();
             self.find.settled = 0;
+        }
+    }
+
+    /// Find matches the labels of drawn diagrams, so with a query typed every diagram of the page
+    /// is drawn, the ones nearest `first` (the leaf at the top of the view) first.
+    #[allow(clippy::too_many_arguments)]
+    fn request_for_find(&mut self, doc: &Doc, first: usize, input: &Input, engine: &mut Engine, next_job: &mut u64, now: f64) {
+        if !self.find.open || self.find.query.is_empty() {
+            return;
+        }
+        let mut wanted: Vec<usize> = (0..doc.leaves.len())
+            .filter(|&index| matches!(doc.leaves[index].kind, Kind::Diagram { .. }) && !self.artifacts.contains_key(&doc.leaves[index].hash))
+            .collect();
+        wanted.sort_by_key(|index| index.abs_diff(first));
+        wanted.truncate(FIND_DRAW_LEAVES);
+        for index in wanted {
+            self.request_diagrams(doc, index, index + 1, input, engine, next_job, now);
         }
     }
 
@@ -831,14 +880,16 @@ impl DocView {
         self.slots.retain(|_, (_, used)| *used >= keep);
     }
 
-    /// Forgets per-leaf state of leaves the document no longer has.
+    /// Forgets per-leaf state of leaves the document no longer has (an edited leaf is a new one).
     fn prune_per_leaf(&mut self) {
-        if self.hscroll.is_empty() && self.artifacts.is_empty() {
+        if self.hscroll.is_empty() && self.artifacts.is_empty() && self.height_cache.is_empty() {
             return;
         }
         let alive: std::collections::HashSet<u64> = self.doc.leaves.iter().map(|leaf| leaf.hash).collect();
         self.hscroll.retain(|hash, _| alive.contains(hash));
         self.artifacts.retain(|hash, _| alive.contains(hash));
+        // A height key is the leaf's hash mixed with the width it was measured at.
+        self.height_cache.retain(|key, (width, _)| alive.contains(&(key ^ width_mix(*width))));
     }
 
     /// The height of `leaf` last measured at `width`, if any.
@@ -1060,7 +1111,7 @@ impl DocView {
         if self.settle.pending() {
             ctx.request_repaint();
         }
-        let col_x = rect.left() + ((rect.width() - width) * 0.5).max(0.0);
+        let col_x = rect.left() + column_offset(rect.width(), width);
         if self.key.as_ref().map(|(file, rev)| (file.as_str(), *rev)) != Some((input.file_id, input.revision)) {
             self.reload(input, width);
         } else if resized {
@@ -1219,6 +1270,7 @@ impl DocView {
                 this.height_cache.insert(key_of(&doc.leaves[index], width), (width.round() as u32, height));
             };
             self.request_diagrams(&doc, first.saturating_sub(4), (last + 12).min(count), input, engine, next_job, now);
+            self.request_for_find(&doc, first, input, engine, next_job, now);
             for index in first..=last {
                 layout(self, index);
             }
@@ -1621,7 +1673,7 @@ impl DocView {
                 let clip = painter.clip_rect().intersect(view);
                 let sub = painter.with_clip_rect(clip);
                 // Find on the page rings the matching nodes; nothing else on the page is dimmed.
-                let (matches, selected) = self.leaf_nodes(index);
+                let (matches, current) = self.leaf_nodes(index);
                 paint::paint_scene(
                     &sub,
                     view,
@@ -1630,7 +1682,7 @@ impl DocView {
                     input.style,
                     input.dark,
                     p.accent,
-                    &paint::Emphasis { selected, strong_nodes: &[], strong_edges: &[], matches: &matches, dim: 0.0 },
+                    &paint::Emphasis { selected: None, strong_nodes: &[], strong_edges: &[], matches: &matches, current, dim: 0.0, settled: true },
                     &mut self.scratch,
                 );
                 if clipped {
@@ -2334,6 +2386,47 @@ mod tests {
     }
 
     #[test]
+    fn width_settle_follows_a_continuous_resize_without_waiting_for_it_to_stop() {
+        let mut settle = WidthSettle::default();
+        settle.next(900.0);
+        let mut adopted = Vec::new();
+        let mut since = 0;
+        for frame in 0..40 {
+            let available = 900.0 - 5.0 * frame as f32;
+            let (layout, changed) = settle.next(available);
+            since += 1;
+            if changed {
+                adopted.push(layout);
+                since = 0;
+            }
+            assert!(since <= 8, "frame {frame}: the layout has lagged for {since} frames of a resize");
+        }
+        assert!((4..=6).contains(&adopted.len()), "a 40 frame drag reflows about every 8 frames: {adopted:?}");
+    }
+
+    #[test]
+    fn leaving_a_leaf_version_forgets_its_measured_heights() {
+        let mut rig = Harness::new(big_doc(20));
+        for _ in 0..3 {
+            rig.frame(800.0);
+        }
+        let width = rig.view.width.round() as u32;
+        rig.view.height_cache.insert(0xDEAD_BEEF, (width, 123.0));
+        let alive = rig.view.height_cache.len() - 1;
+        assert!(alive > 0);
+        rig.view.prune_per_leaf();
+        assert!(!rig.view.height_cache.contains_key(&0xDEAD_BEEF), "a height for an edited-away leaf survived");
+        assert_eq!(rig.view.height_cache.len(), alive, "heights of leaves still in the document stay");
+    }
+
+    #[test]
+    fn the_column_keeps_its_margin_while_the_layout_is_wider_than_the_space() {
+        assert_eq!(column_offset(900.0, 736.0), 82.0, "centred when there is room");
+        assert_eq!(column_offset(800.0, 736.0), MARGIN_X, "the margin is the least");
+        assert_eq!(column_offset(500.0, 736.0), MARGIN_X, "the overhang goes off the right edge");
+    }
+
+    #[test]
     fn shifting_the_scroll_moves_the_target_with_it() {
         assert_eq!(shift_scroll(1000.0, 5000.0, 1040.0, 1200.0), (1040.0, 5040.0));
         assert_eq!(shift_scroll(1000.0, 5000.0, 960.0, 1200.0), (960.0, 4960.0));
@@ -2351,7 +2444,7 @@ mod tests {
         assert_eq!(start, 736.0);
         // A side panel sliding in: the window narrows a little every frame.
         let mut glide = Vec::new();
-        for step in 1..=12 {
+        for step in 1..=7 {
             let window = 800.0 - 10.0 * step as f32;
             rig.frame(window);
             glide.push(window);
@@ -2675,17 +2768,112 @@ mod tests {
 
     #[test]
     fn page_find_follows_a_diagram_that_arrives_late() {
-        let mut rig = Harness::new("```mermaid\nflowchart TD\n  A[An idea]\n```\n".to_owned());
+        let mut rig = Harness::new("```mermaid
+flowchart TD
+  A[An idea]
+```
+".to_owned());
         rig.frame(1000.0);
         find_on_page(&mut rig, "idea", 1);
-        assert!(!rig.view.find.matches.is_empty());
-        assert!(rig.view.find.matches.iter().all(|hit| matches!(hit, Hit::Source { .. })), "source hits before the drawing: {:?}", rig.view.find.matches);
+        assert!(rig.view.find.matches.is_empty(), "an undrawn flowchart offers no syntax to match: {:?}", rig.view.find.matches);
         draw_diagrams(&mut rig);
         for _ in 0..10 {
             rig.frame(1000.0);
         }
         assert!(!rig.view.find.matches.is_empty());
         assert!(rig.view.find.matches.iter().all(|hit| matches!(hit, Hit::Node { .. })), "node hits once drawn: {:?}", rig.view.find.matches);
+    }
+
+    #[test]
+    fn page_find_ignores_the_syntax_of_a_diagram_that_is_not_drawn_yet() {
+        let mut rig = Harness::new("```mermaid
+flowchart TD
+  idea1[Plan] --> B[Ship]
+```
+".to_owned());
+        rig.frame(1000.0);
+        for query in ["flowchart", "-->", "idea1"] {
+            find_on_page(&mut rig, query, 1);
+            assert!(rig.view.find.matches.is_empty(), "{query:?} is Mermaid syntax, not text: {:?}", rig.view.find.matches);
+        }
+        draw_diagrams(&mut rig);
+        for query in ["flowchart", "-->", "idea1"] {
+            find_on_page(&mut rig, query, 3);
+            assert!(rig.view.find.matches.is_empty(), "{query:?} after drawing: {:?}", rig.view.find.matches);
+        }
+        find_on_page(&mut rig, "plan", 3);
+        assert_eq!(rig.view.find.matches.len(), 1, "the label is found");
+    }
+
+    #[test]
+    fn page_find_draws_diagrams_far_from_the_viewport() {
+        let filler = "A paragraph of filler text.
+
+".repeat(80);
+        let mut rig = Harness::new(format!("An idea at the top.
+
+{filler}```mermaid
+flowchart TD
+  A[An idea]
+```
+"));
+        for _ in 0..30 {
+            rig.frame(1000.0);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(rig.view.artifacts.is_empty(), "the diagram is far below the window");
+        rig.view.open_find();
+        rig.view.find.query = "idea".to_owned();
+        rig.view.find.restart = true;
+        for _ in 0..600 {
+            rig.frame(1000.0);
+            if !rig.view.artifacts.is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        for _ in 0..5 {
+            rig.frame(1000.0);
+        }
+        assert!(rig.view.find.matches.iter().any(|hit| matches!(hit, Hit::Node { .. })), "found in the drawn diagram: {:?}", rig.view.find.matches);
+    }
+
+    #[test]
+    fn page_find_keeps_its_place_when_a_diagram_arrives_during_a_reveal() {
+        let filler = "A paragraph of filler text that makes the page taller than the window.
+
+".repeat(60);
+        let mut rig = Harness::new(format!("idea at the top
+
+{filler}```mermaid
+flowchart TD
+  idea1[An idea]
+```
+
+idea at the end
+"));
+        rig.frame(1000.0);
+        find_on_page(&mut rig, "idea", 1);
+        let last = rig.view.find.matches.len() - 1;
+        let target = rig.view.find.matches[last].clone();
+        assert!(matches!(target, Hit::Text { .. }));
+        // The reader steps to the last hit; the page is on its way there.
+        rig.view.find.current = last;
+        rig.view.find.reveal = Some(target.clone());
+        rig.view.find.settled = 0;
+        let before = rig.view.drawn;
+        for _ in 0..600 {
+            rig.frame(1000.0);
+            if rig.view.drawn != before {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_ne!(rig.view.drawn, before, "the diagram arrived");
+        rig.frame(1000.0);
+        assert!(rig.view.find.matches.iter().any(|hit| matches!(hit, Hit::Node { .. })), "the diagram now contributes a node hit");
+        assert_eq!(rig.view.find.matches.get(rig.view.find.current), Some(&target), "still on the same hit: {:?} at {}", rig.view.find.matches, rig.view.find.current);
+        assert_eq!(rig.view.find.reveal.as_ref(), Some(&target), "the reveal in flight still aims at it");
     }
 
     #[test]

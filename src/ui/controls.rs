@@ -264,6 +264,22 @@ pub fn key_cap(ui: &mut Ui, text: &str) {
     ui.painter().galley(pos, galley, p.secondary);
 }
 
+/// Space kept between scrolled content and a solid scroll bar.
+const SCROLL_GAP: f32 = 6.0;
+
+/// Runs `show` (which builds a `ScrollArea`) with a solid scroll bar that takes room of its own
+/// beside the content. egui's default floating bar reserves none and is drawn over the content,
+/// on top of anything right-aligned in the rows: dialog controls, palette shortcuts.
+pub fn solid_scroll<R>(ui: &mut Ui, show: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.scope(|ui| {
+        let scroll = &mut ui.spacing_mut().scroll;
+        *scroll = egui::style::ScrollStyle::solid();
+        scroll.bar_inner_margin = SCROLL_GAP;
+        show(ui)
+    })
+    .inner
+}
+
 /// Draws a shortcut such as "Ctrl+Shift+O" as a row of key caps.
 pub fn key_caps(ui: &mut Ui, shortcut: &str) {
     ui.spacing_mut().item_spacing.x = token::SPACE[0];
@@ -275,6 +291,19 @@ pub fn key_caps(ui: &mut Ui, shortcut: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_solid_scroll_bar_reserves_its_own_width_and_only_inside() {
+        let ctx = Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                assert_eq!(ui.spacing().scroll.allocated_width(), 0.0, "egui's floating bar takes no room");
+                let inside = solid_scroll(ui, |ui| ui.spacing().scroll.allocated_width());
+                assert!(inside >= 12.0, "bar plus gap: {inside}");
+                assert_eq!(ui.spacing().scroll.allocated_width(), 0.0, "the rest of the ui keeps the floating bar");
+            });
+        });
+    }
 
     fn run_band(ctx: &Context, id: Id, time: f64, top: f32) -> (f32, f32) {
         let mut out = (0.0, 0.0);
