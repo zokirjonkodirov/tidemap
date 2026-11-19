@@ -23,8 +23,6 @@ pub const FAST: f32 = 0.12;
 pub const BASE: f32 = 0.18;
 /// Panels sliding in and out.
 pub const PANEL: f32 = 0.26;
-/// Camera moves (fit, focus, zoom steps).
-pub const CAMERA: f32 = 0.34;
 
 /// Decelerating curve with a soft landing (close to CSS `cubic-bezier(0.2, 0.8, 0.2, 1)`).
 pub fn ease_out(t: f32) -> f32 {

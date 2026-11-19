@@ -109,12 +109,12 @@ pub fn frame(app: &mut TidemapApp, ctx: &Context) {
     );
 
     topbar::show(app, ctx, p);
-    // Panels glide: their width eases, their card slides with the moving edge and fades.
-    let sidebar_t = motion::toggle(ctx, Id::new("sidebar-reveal"), mode.sidebar, motion::PANEL);
+    // Panels glide on a spring: their width follows it and the solid card slides with the moving edge.
+    let sidebar_t = motion::spring(ctx, Id::new("sidebar-reveal"), f32::from(mode.sidebar), motion::GLIDE).clamp(0.0, 1.0);
     if sidebar_t > 0.002 && app.workspace.is_some() && screen.width() >= token::NARROW {
         sidebar_panel(app, ctx, p, sidebar_t);
     }
-    let source_t = motion::toggle(ctx, Id::new("source-reveal"), mode.source == SourceMode::Side, motion::PANEL);
+    let source_t = motion::spring(ctx, Id::new("source-reveal"), f32::from(mode.source == SourceMode::Side), motion::GLIDE).clamp(0.0, 1.0);
     if source_t > 0.002 && has_file && screen.width() >= token::NARROW {
         source_panel(app, ctx, p, source_t);
     }
@@ -195,17 +195,12 @@ fn inset_margin(bottom: f32) -> Margin {
 }
 
 /// Lays a panel's card out at its full width inside `panel` (which may still be opening),
-/// anchored to the panel's inner edge so the card slides with it, faded by `t`.
-fn sliding_card(ui: &mut Ui, panel: Rect, full: f32, from_left: bool, t: f32, add: impl FnOnce(&mut Ui)) {
+/// anchored to the panel's inner edge so the solid card slides with it.
+fn sliding_card(ui: &mut Ui, panel: Rect, full: f32, from_left: bool, add: impl FnOnce(&mut Ui)) {
     let left = if from_left { panel.right() - full } else { panel.left() };
     let content = Rect::from_min_size(egui::pos2(left, panel.top()), Vec2::new(full, panel.height()));
     ui.set_clip_rect(panel.intersect(ui.clip_rect()));
-    ui.scope_builder(UiBuilder::new().max_rect(content), |ui| {
-        if t < 1.0 {
-            ui.multiply_opacity(motion::ease_out(t).powf(0.8));
-        }
-        add(ui);
-    });
+    ui.scope_builder(UiBuilder::new().max_rect(content), add);
 }
 
 fn sidebar_panel(app: &mut TidemapApp, ctx: &Context, p: Palette, t: f32) {
@@ -219,7 +214,7 @@ fn sidebar_panel(app: &mut TidemapApp, ctx: &Context, p: Palette, t: f32) {
         .frame(Frame::NONE)
         .show(ctx, |ui| {
             let panel = ui.max_rect();
-            sliding_card(ui, panel, full, true, t, |ui| {
+            sliding_card(ui, panel, full, true, |ui| {
                 card(ui, p, inset_margin(token::INSET), |ui| sidebar::show(app, ui, p));
             });
             if t >= 1.0 {
@@ -248,7 +243,7 @@ fn source_panel(app: &mut TidemapApp, ctx: &Context, p: Palette, t: f32) {
         .frame(Frame::NONE)
         .show(ctx, |ui| {
             let panel = ui.max_rect();
-            sliding_card(ui, panel, full, false, t, |ui| {
+            sliding_card(ui, panel, full, false, |ui| {
                 card(ui, p, inset_margin(token::INSET), |ui| source::show_source(app, ui, p));
             });
             if t >= 1.0 {

@@ -1,13 +1,12 @@
 //! Native diagram viewport: camera, input and selection. Painting lives in `paint`.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use egui::{Align2, Color32, FontId, Pos2, Sense, Stroke, StrokeKind, Vec2};
 use tidemap_diagram::{EdgeId, Endpoint, ItemId, NodeId, Rect, Scene, StyleSheet};
 use tidemap_model::{Camera, RenderArtifact};
 
-use crate::motion;
+use crate::motion::{self, SpringState};
 use crate::paint::{self, Emphasis, Lod};
 use crate::theme::{self, Palette, token};
 
@@ -31,10 +30,14 @@ struct Fade {
     nodes: Vec<NodeId>,
 }
 
+/// A camera glide: one critically damped spring per component, retargetable mid-flight.
+///
+/// Zoom is sprung in log space so each step covers the same ratio, matching how zoom feels.
 struct CameraAnim {
-    from: Camera,
+    x: SpringState,
+    y: SpringState,
+    log_zoom: SpringState,
     to: Camera,
-    started: Instant,
 }
 
 const MIN_LABEL_ZOOM: f32 = token::FONT_MONO / token::FONT_UI;
@@ -101,6 +104,10 @@ pub struct DiagramCanvas {
     restore_pending: bool,
     fit_pending: bool,
     anim: Option<CameraAnim>,
+    /// Motion-clock time of the last camera tick; `None` while no glide is running.
+    last_tick: Option<f64>,
+    /// Reduced motion was on last frame: camera moves land at once.
+    reduced_motion: bool,
     scratch: Vec<ItemId>,
     /// Consecutive frames in which the current artifact was painted.
     pub painted_frames: u32,
@@ -141,6 +148,8 @@ impl Default for DiagramCanvas {
             restore_pending: false,
             fit_pending: true,
             anim: None,
+            last_tick: None,
+            reduced_motion: false,
             scratch: Vec::new(),
             painted_frames: 0,
             last_stats: None,
@@ -177,6 +186,11 @@ impl DiagramCanvas {
         self.matches.clear();
     }
 
+    /// Glides the camera to `to`.
+    ///
+    /// A glide already in flight is retargeted and keeps its velocity, so repeated zoom steps
+    /// flow into one motion instead of restarting from rest. Under reduced motion the camera
+    /// lands at once.
     fn animate_to(&mut self, to: Camera) {
         self.fling = None;
         self.follow_fit = false;
@@ -188,25 +202,33 @@ impl DiagramCanvas {
             self.anim = None;
             return;
         }
-        self.anim = Some(CameraAnim {
-            from,
+        if self.reduced_motion {
+            self.camera = to;
+            self.anim = None;
+            return;
+        }
+        let anim = self.anim.get_or_insert_with(|| CameraAnim {
+            x: SpringState { value: from.x, velocity: 0.0 },
+            y: SpringState { value: from.y, velocity: 0.0 },
+            log_zoom: SpringState { value: from.zoom.ln(), velocity: 0.0 },
             to,
-            started: Instant::now(),
         });
+        anim.to = to;
     }
 
-    fn tick_anim(&mut self) {
-        let Some(anim) = &self.anim else { return };
-        let t = (anim.started.elapsed().as_secs_f32() / motion::CAMERA).min(1.0);
-        let eased = motion::ease_out(t);
-        let (from, to) = (anim.from, anim.to);
-        self.camera = Camera {
-            x: from.x + (to.x - from.x) * eased,
-            y: from.y + (to.y - from.y) * eased,
-            zoom: from.zoom * (to.zoom / from.zoom).powf(eased),
-        };
-        if t >= 1.0 {
+    /// Advances the camera glide by `dt` seconds of motion-clock time.
+    fn tick_anim(&mut self, dt: f32) {
+        let Some(anim) = &mut self.anim else { return };
+        let to = anim.to;
+        motion::advance(&mut anim.x, to.x, motion::GLIDE, dt);
+        motion::advance(&mut anim.y, to.y, motion::GLIDE, dt);
+        motion::advance(&mut anim.log_zoom, to.zoom.ln(), motion::GLIDE, dt);
+        let at_rest = |state: &SpringState, target: f32| state.value == target && state.velocity == 0.0;
+        if at_rest(&anim.x, to.x) && at_rest(&anim.y, to.y) && at_rest(&anim.log_zoom, to.zoom.ln()) {
+            self.camera = to;
             self.anim = None;
+        } else {
+            self.camera = Camera { x: anim.x.value, y: anim.y.value, zoom: anim.log_zoom.value.exp() };
         }
     }
 
@@ -379,7 +401,15 @@ impl DiagramCanvas {
         dark: bool,
         p: Palette,
     ) -> CanvasResponse {
-        self.tick_anim();
+        // The glide follows the motion clock, so slow-motion and reduced motion apply to it.
+        let now = motion::now(ui.ctx());
+        self.reduced_motion = motion::reduced(ui.ctx());
+        if self.anim.is_some() {
+            let last = self.last_tick.replace(now).unwrap_or(now);
+            self.tick_anim((now - last) as f32);
+        } else {
+            self.last_tick = None;
+        }
         let dt = ui.input(|i| i.stable_dt);
         self.tick_fling(dt);
         if self.anim.is_some() || self.fling.is_some() {
@@ -408,10 +438,10 @@ impl DiagramCanvas {
                     self.camera.x += shift.x;
                     self.camera.y += shift.y;
                     if let Some(anim) = anim {
-                        for camera in [&mut anim.from, &mut anim.to] {
-                            camera.x += shift.x;
-                            camera.y += shift.y;
-                        }
+                        anim.x.value += shift.x;
+                        anim.y.value += shift.y;
+                        anim.to.x += shift.x;
+                        anim.to.y += shift.y;
                     }
                 }
             }
@@ -832,4 +862,25 @@ pub fn paint_card(
             });
         });
     pressed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn camera_retarget_keeps_velocity() {
+        let mut canvas = DiagramCanvas::default();
+        canvas.camera = Camera { x: 0.0, y: 0.0, zoom: 1.0 };
+        canvas.animate_to(Camera { x: 0.0, y: 0.0, zoom: 1.25 });
+        for _ in 0..3 {
+            canvas.tick_anim(1.0 / 60.0);
+        }
+        let z3 = canvas.camera.zoom;
+        canvas.animate_to(Camera { x: 0.0, y: 0.0, zoom: 1.5625 });
+        canvas.tick_anim(1.0 / 60.0);
+        let z4 = canvas.camera.zoom;
+        canvas.tick_anim(1.0 / 60.0);
+        assert!(z4 > z3 && canvas.camera.zoom - z4 >= z4 - z3, "momentum lost");
+    }
 }
