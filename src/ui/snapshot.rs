@@ -16,19 +16,39 @@ use tidemap_model::Theme;
 
 use crate::motion;
 
-/// What a snapshot is for; it travels with the screenshot request and comes back with it.
+/// What a snapshot is for. Both are toggles: what they do is decided when they are applied,
+/// so several made in a row compose (two theme toggles end where they began).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Purpose {
-    /// The appearance changes to `to`; the new theme spreads outward from `from`.
-    Theme { to: Theme, from: Pos2 },
+    /// The appearance flips between light and dark, spreading outward from `from`.
+    Theme { from: Pos2 },
     /// The page and diagram views swap; the old view fades inside `clip` (the canvas area).
     Page { clip: Rect },
 }
 
-/// A request waiting for its screenshot.
+/// The theme after one toggle. `system_dark` is whether the system appearance is dark, which
+/// decides what a toggle from "match system" means; an explicit theme just flips.
+pub fn toggled_theme(theme: Theme, system_dark: bool) -> Theme {
+    match theme {
+        Theme::Dark => Theme::Light,
+        Theme::Light => Theme::Dark,
+        Theme::System if system_dark => Theme::Light,
+        Theme::System => Theme::Dark,
+    }
+}
+
+/// What travels with a screenshot request and comes back with it: which request it answers.
 #[derive(Clone, Copy)]
-struct Pending {
+struct Ticket {
+    id: u64,
     purpose: Purpose,
+}
+
+/// The request waiting for its screenshot, and the ones made since, in order.
+#[derive(Clone)]
+struct Pending {
+    ticket: Ticket,
+    queued: Vec<Purpose>,
     /// Pass number and motion-clock time of the request.
     pass: u64,
     at: f64,
@@ -44,6 +64,7 @@ struct Reveal {
 
 const PENDING: &str = "snapshot-pending";
 const REVEAL: &str = "snapshot-reveal";
+const NEXT_ID: &str = "snapshot-next-id";
 /// Segments of the circle in a theme reveal.
 const SEGMENTS: usize = 96;
 /// Length of the plain fade used instead of the sweep and scale under reduced motion.
@@ -62,49 +83,55 @@ fn overdue(requested_pass: u64, requested_at: f64, now_pass: u64, now: f64) -> b
 }
 
 /// Asks for a screenshot of the current frame, for `purpose`. A request made while an earlier
-/// one is still waiting is ignored: the first change is applied within a frame or two and the
-/// user's next click then starts its own.
+/// one is still waiting is queued behind it: all are applied, in order, when that screenshot
+/// arrives, so no toggle is ever lost.
 pub fn request(ctx: &Context, purpose: Purpose) {
-    if pending(ctx) {
+    let key = Id::new(PENDING);
+    motion::keep_busy(ctx);
+    if let Some(mut waiting) = ctx.data(|data| data.get_temp::<Pending>(key)) {
+        waiting.queued.push(purpose);
+        ctx.data_mut(|data| data.insert_temp(key, waiting));
         return;
     }
     let (pass, at) = (ctx.cumulative_pass_nr(), motion::now(ctx));
-    ctx.data_mut(|data| data.insert_temp(Id::new(PENDING), Pending { purpose, pass, at }));
-    ctx.send_viewport_cmd(ViewportCommand::Screenshot(UserData::new(purpose)));
-    // Keep frames coming so the fallback in `take` can run even if the screenshot never does.
-    ctx.request_repaint_after(std::time::Duration::from_millis(160));
-}
-
-/// Whether a screenshot has been requested and not yet taken.
-pub fn pending(ctx: &Context) -> bool {
-    ctx.data(|data| data.get_temp::<Pending>(Id::new(PENDING))).is_some()
+    let id = ctx.data_mut(|data| {
+        let id = data.get_temp::<u64>(Id::new(NEXT_ID)).unwrap_or(0) + 1;
+        data.insert_temp(Id::new(NEXT_ID), id);
+        id
+    });
+    let ticket = Ticket { id, purpose };
+    ctx.data_mut(|data| data.insert_temp(key, Pending { ticket, queued: Vec::new(), pass, at }));
+    ctx.send_viewport_cmd(ViewportCommand::Screenshot(UserData::new(ticket)));
 }
 
 /// Takes our screenshot when it arrives: keeps it as the texture of a new reveal (replacing any
-/// running one, whose half-revealed frame the screenshot already contains) and returns its
-/// purpose, for the app to apply in this same frame. When the screenshot is overdue the purpose
-/// is returned without a reveal. Screenshots without our purpose (screenshot mode's own) are
-/// left alone, and a late one after the fallback is ignored.
-pub fn take(ctx: &Context) -> Option<Purpose> {
-    let waiting = ctx.data(|data| data.get_temp::<Pending>(Id::new(PENDING)))?;
+/// running one, whose half-revealed frame the screenshot already contains) and returns the
+/// purposes to apply, oldest first, in this same frame. When the screenshot is overdue they are
+/// returned without a reveal. While it is awaited, frames keep coming, so one or the other
+/// always resolves without input. Screenshots that are not ours (screenshot mode's own) or not
+/// the current request's (a late one after the fallback) are ignored.
+pub fn take(ctx: &Context) -> Vec<Purpose> {
+    let Some(waiting) = ctx.data(|data| data.get_temp::<Pending>(Id::new(PENDING))) else { return Vec::new() };
     let arrived = ctx.input(|input| {
         input.events.iter().find_map(|event| match event {
             Event::Screenshot { user_data, image, .. } => user_data
                 .data
                 .as_ref()
-                .and_then(|data| data.downcast_ref::<Purpose>())
-                .filter(|purpose| **purpose == waiting.purpose)
+                .and_then(|data| data.downcast_ref::<Ticket>())
+                .filter(|ticket| ticket.id == waiting.ticket.id)
                 .map(|_| image.clone()),
             _ => None,
         })
     });
+    let first = waiting.ticket.purpose;
     let reveal = arrived.map(|image| Reveal {
-        purpose: waiting.purpose,
+        purpose: first,
         start: motion::now(ctx),
         texture: ctx.load_texture("snapshot", (*image).clone(), TextureOptions::LINEAR),
     });
     if reveal.is_none() && !overdue(waiting.pass, waiting.at, ctx.cumulative_pass_nr(), motion::now(ctx)) {
-        return None;
+        motion::keep_busy(ctx);
+        return Vec::new();
     }
     ctx.data_mut(|data| {
         data.remove::<Pending>(Id::new(PENDING));
@@ -113,7 +140,7 @@ pub fn take(ctx: &Context) -> Option<Purpose> {
         }
     });
     ctx.request_repaint();
-    Some(waiting.purpose)
+    std::iter::once(first).chain(waiting.queued).collect()
 }
 
 /// Progress of a reveal `age` seconds old, 0 to 1, and whether it is over. Reduced motion is a
@@ -223,6 +250,18 @@ mod tests {
         let corner = egui::vec2(1440.0, 940.0).length();
         assert!(ring_mesh(egui::Pos2::ZERO, corner + 1.0, screen, 96, egui::TextureId::default()).indices.is_empty());
         assert_eq!(ring_mesh(egui::Pos2::ZERO, 0.0, screen, 96, egui::TextureId::default()).indices.len(), 96 * 6);
+    }
+
+    #[test]
+    fn queued_theme_toggles_compose() {
+        let system_dark = true;
+        let fold = |start: Theme, toggles: usize| (0..toggles).fold(start, |theme, _| toggled_theme(theme, system_dark));
+        assert_eq!(fold(Theme::Light, 1), Theme::Dark);
+        assert_eq!(fold(Theme::Light, 2), Theme::Light);
+        assert_eq!(fold(Theme::Dark, 3), Theme::Light);
+        // From "match system" (dark here) one toggle is light; the next is dark again.
+        assert_eq!(fold(Theme::System, 1), Theme::Light);
+        assert_eq!(fold(Theme::System, 2), Theme::Dark);
     }
 
     #[test]

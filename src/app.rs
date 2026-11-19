@@ -56,7 +56,7 @@ pub struct TidemapApp {
     pub(crate) workspace:Option<WorkspaceSnapshot>,pub(crate) recents:Vec<RecentWorkspace>,pub(crate) recoveries:Vec<RecoveryRecord>,pub(crate) buffers:BTreeMap<String,Buffer>,
     pub(crate) active_file:String,pub(crate) active_block:String,pub(crate) state:WorkspaceState,pub(crate) canvas:DiagramCanvas,pub(crate) nav_travel:Option<(crate::canvas::Travel,String)>,pub(crate) editor:SourceEditor,pub(crate) docview:crate::markdown::view::DocView,
     pub(crate) source_text:String,pub(crate) editor_key:String,pub(crate) sidebar_open:bool,pub(crate) editor_open:bool,pub(crate) full_file:bool,
-    pub(crate) tree_query:String,pub(crate) collapsed:BTreeSet<String>,pub(crate) palette_open:bool,pub(crate) palette_query:String,pub(crate) palette_index:usize,pub(crate) palette_fresh:bool,pub(crate) search_fresh:bool,pub(crate) info_anchor:egui::Rect,pub(crate) canvas_area:egui::Rect,pub(crate) theme_anchor:egui::Rect,pub(crate) open_from_embed:Option<(String,egui::Rect)>,ctx:egui::Context,
+    pub(crate) tree_query:String,pub(crate) collapsed:BTreeSet<String>,pub(crate) palette_open:bool,pub(crate) palette_query:String,pub(crate) palette_index:usize,pub(crate) palette_fresh:bool,pub(crate) search_fresh:bool,pub(crate) info_anchor:egui::Rect,pub(crate) canvas_area:egui::Rect,pub(crate) theme_anchor:egui::Rect,pub(crate) page_opens:std::collections::VecDeque<Option<(String,egui::Rect)>>,ctx:egui::Context,
     pub(crate) diagram_search:String,pub(crate) search_open:bool,pub(crate) outline_open:bool,pub(crate) info_open:bool,pub(crate) dialog:Option<Dialog>,
     pub(crate) recovery_file:Option<String>,pub(crate) conflict_file:Option<String>,pub(crate) toast:Option<(String,Instant)>,pub(crate) search_hits:Vec<NodeId>,pub(crate) search_key:(String,String),pub(crate) search_cursor:Option<usize>,
     pub(crate) previews:HashMap<String,Preview>,pub(crate) diagnostics:HashMap<String,RenderDiagnostic>,pub(crate) pending_render:Option<PendingRender>,
@@ -109,7 +109,7 @@ impl TidemapApp {
         let shot_empty=options.shot.as_ref().is_some_and(|shot|shot.empty);
         let shot=options.shot.map(|shot|ShotState{path:shot.path,started:Instant::now(),requested:false,frames:0,select:shot.select,source:shot.source,dialog:shot.dialog,info:shot.info,palette:shot.palette,search:shot.search,outline:shot.outline});
         let mut app=Self {core,renderer,style,shot,settings,dark,workspace,recents,recoveries,buffers:BTreeMap::new(),active_file:String::new(),active_block:String::new(),editor_open:state.editor_open,full_file:state.full_file,state,
-            canvas:DiagramCanvas::default(),nav_travel:None,editor:SourceEditor::default(),docview:Default::default(),source_text:String::new(),editor_key:String::new(),sidebar_open:true,tree_query:String::new(),collapsed:BTreeSet::new(),palette_open:false,palette_query:String::new(),palette_index:0,palette_fresh:false,search_fresh:false,info_anchor:egui::Rect::NOTHING,canvas_area:egui::Rect::NOTHING,theme_anchor:egui::Rect::NOTHING,open_from_embed:None,ctx:cc.egui_ctx.clone(),
+            canvas:DiagramCanvas::default(),nav_travel:None,editor:SourceEditor::default(),docview:Default::default(),source_text:String::new(),editor_key:String::new(),sidebar_open:true,tree_query:String::new(),collapsed:BTreeSet::new(),palette_open:false,palette_query:String::new(),palette_index:0,palette_fresh:false,search_fresh:false,info_anchor:egui::Rect::NOTHING,canvas_area:egui::Rect::NOTHING,theme_anchor:egui::Rect::NOTHING,page_opens:Default::default(),ctx:cc.egui_ctx.clone(),
             diagram_search:String::new(),search_open:false,outline_open:false,info_open:false,dialog:None,recovery_file:None,conflict_file:None,toast:error.map(|text|(text,Instant::now())),search_hits:Vec::new(),search_key:(String::new(),String::new()),search_cursor:None,previews:HashMap::new(),diagnostics:HashMap::new(),pending_render:None,active_job:None,next_job:1,reads:HashMap::new(),generation:0,pending_restore,last_journal:None,last_persist:None,allow_close:false,font_ready:false,diagnostics_text:String::new(),workspace_revision:1,tree_cache:None,
             style_file,style_confirm:false,held:None,clean_seen:BTreeSet::new(),last_edit:Instant::now(),cursor_seen:None,prefetch_due:false,card_frames:0,export:ExportChoice{format:ExportFormat::Svg,scale:2,background:true,job:None},shot_open:None,shot_idle:false,
             palette_mode:ui::palette::PaletteMode::Files,tree_cursor:None,search_collapsed:BTreeSet::new(),pending_new:None,focus_request:None,sidebar_focused:false,appeared:HashMap::new(),workspace_settled:false};
@@ -990,33 +990,30 @@ impl TidemapApp {
 
     /// Switches between the page and the diagram once the old frame is snapshotted. `embed` is
     /// the diagram to open and where it sits on screen, when the switch is a click on an embed.
+    /// Each request is answered by exactly one page purpose, so `page_opens` stays in step.
     fn request_page_switch(&mut self, embed: Option<(String, egui::Rect)>) {
-        if ui::snapshot::pending(&self.ctx) {
-            return;
-        }
-        self.open_from_embed = embed;
+        self.page_opens.push_back(embed);
         ui::snapshot::request(&self.ctx, ui::snapshot::Purpose::Page { clip: self.canvas_area });
     }
 
     /// Switches the appearance between light and dark, spreading from `from` (a screen point).
     /// Every theme toggle (button, shortcut, palette) comes through here.
     pub(crate) fn request_theme_toggle(&mut self, from: egui::Pos2) {
-        let to = if self.dark { Theme::Light } else { Theme::Dark };
-        ui::snapshot::request(&self.ctx, ui::snapshot::Purpose::Theme { to, from });
+        ui::snapshot::request(&self.ctx, ui::snapshot::Purpose::Theme { from });
     }
 
     /// Makes the change a snapshot was taken for, in the frame the screenshot arrives.
     fn apply_snapshot(&mut self, purpose: ui::snapshot::Purpose) {
         match purpose {
-            ui::snapshot::Purpose::Theme { to, .. } => {
-                self.settings.theme = to;
+            ui::snapshot::Purpose::Theme { .. } => {
+                self.settings.theme = ui::snapshot::toggled_theme(self.settings.theme, self.dark);
                 self.save_settings();
             }
             ui::snapshot::Purpose::Page { .. } => {
-                match self.open_from_embed.take() {
+                match self.page_opens.pop_front().flatten() {
                     Some((id, from)) => {
                         self.select_block(id);
-                        self.canvas.enter_from(&self.ctx, from);
+                        self.canvas.enter_from(&self.ctx, &self.active_block, from);
                         self.state.diagram_view = true;
                     }
                     None => self.state.diagram_view = !self.state.diagram_view,
@@ -1102,7 +1099,7 @@ impl eframe::App for TidemapApp {
                 .unwrap_or(1.0);
             crate::motion::set_time_scale(ctx, scale);
         });
-        if let Some(purpose) = ui::snapshot::take(ctx) {
+        for purpose in ui::snapshot::take(ctx) {
             self.apply_snapshot(purpose);
         }
         self.dark = theme::apply(ctx, self.settings.theme);

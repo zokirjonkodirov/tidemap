@@ -247,11 +247,27 @@ pub struct DiagramCanvas {
     follow_fit: bool,
     /// Pass number of the last frame this canvas painted, to tell a fresh appearance from a repaint.
     last_pass: Option<u64>,
-    /// Screen rectangle of the page embed the next shown diagram grows out of, and when it was
-    /// set (motion clock); see [`DiagramCanvas::enter_from`].
-    enter: Option<(egui::Rect, f64)>,
+    /// The page embed a diagram grows out of; see [`DiagramCanvas::enter_from`].
+    enter: Option<Enter>,
     /// The running transition is a growth from an embed: no scale-in, no outgoing scene.
     growing: bool,
+}
+
+/// A pending growth: the diagram (block id) it is for, the embed's screen rectangle, and when it
+/// was announced (motion clock).
+struct Enter {
+    diagram: String,
+    from: egui::Rect,
+    at: f64,
+}
+
+/// Takes the growth announced for `diagram`, unless it has expired. A growth for another
+/// diagram stays until its own arrives or it expires; an expired one is dropped.
+fn take_enter(enter: &mut Option<Enter>, diagram: &str, now: f64) -> Option<egui::Rect> {
+    if enter.as_ref().is_some_and(|e| now - e.at >= ENTER_TTL) {
+        *enter = None;
+    }
+    enter.take_if(|e| e.diagram == diagram).map(|e| e.from)
 }
 
 /// How long an unused [`DiagramCanvas::enter_from`] stays valid, in motion-clock seconds. A
@@ -392,11 +408,12 @@ impl DiagramCanvas {
         self.pending_travel.as_ref().map_or(self.travel, |(travel, _)| *travel)
     }
 
-    /// Announces that the next diagram to be shown grows out of `from`, the on-screen rectangle
-    /// of its page embed. The canvas starts that diagram's camera inside `from` and glides it to
-    /// the fit; this replaces the transition the navigation would otherwise run.
-    pub fn enter_from(&mut self, ctx: &egui::Context, from: egui::Rect) {
-        self.enter = Some((from, motion::now(ctx)));
+    /// Announces that `diagram` (a block id) grows out of `from`, the on-screen rectangle of its
+    /// page embed. The canvas starts that diagram's camera inside `from` and glides it to the
+    /// fit, in place of the transition the navigation would otherwise run. Only that diagram's
+    /// artifact uses it, however long the canvas keeps showing another one meanwhile.
+    pub fn enter_from(&mut self, ctx: &egui::Context, diagram: &str, from: egui::Rect) {
+        self.enter = Some(Enter { diagram: diagram.to_owned(), from, at: motion::now(ctx) });
     }
 
     /// Whether the camera glides, the diagram transition runs, or dimming eases.
@@ -642,6 +659,7 @@ impl DiagramCanvas {
         let fresh = self.last_pass.is_none_or(|last| pass > last + 2);
         self.last_pass = Some(pass);
 
+        let grow_from = take_enter(&mut self.enter, &artifact.diagram_id, motion::now(ui.ctx()));
         if self.artifact_id != artifact.id {
             let different_diagram = self.diagram_id != artifact.diagram_id;
             self.artifact_id.clone_from(&artifact.id);
@@ -652,9 +670,8 @@ impl DiagramCanvas {
             if different_diagram {
                 self.travel = take_travel(&mut self.pending_travel, &artifact.diagram_id);
                 self.growing = false;
-                let grows = self.enter.is_some_and(|(_, at)| motion::now(ui.ctx()) - at < ENTER_TTL);
                 self.outgoing = previous
-                    .filter(|old| !fresh && !grows && keeps_outgoing(old.rendered.scene.nodes.len()))
+                    .filter(|old| !fresh && grow_from.is_none() && keeps_outgoing(old.rendered.scene.nodes.len()))
                     .map(|artifact| Outgoing { artifact, camera: self.painted_camera, travel: self.travel });
                 motion::restart(ui.ctx(), egui::Id::new(TRANSITION_ID));
                 self.selected = None;
@@ -670,8 +687,7 @@ impl DiagramCanvas {
             self.restore_pending = false;
         }
         self.shown = Some(artifact.clone());
-        let grow_from = self.enter.take().filter(|(_, at)| motion::now(ui.ctx()) - at < ENTER_TTL);
-        if let Some((from, _)) = grow_from {
+        if let Some(from) = grow_from {
             // The embed grows into the canvas: start inside it and glide to the fit.
             self.growing = true;
             self.camera = camera_into(scene.bounds, from.translate(-viewport.min.to_vec2()));
@@ -1076,6 +1092,19 @@ fn paint_layer(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn growth_is_taken_only_by_its_own_diagram() {
+        let rect = egui::Rect::from_min_size(egui::pos2(1.0, 2.0), egui::vec2(3.0, 4.0));
+        let mut enter = Some(Enter { diagram: "b".into(), from: rect, at: 10.0 });
+        assert_eq!(take_enter(&mut enter, "a", 10.1), None);
+        assert!(enter.is_some(), "another diagram's arrival leaves it waiting");
+        assert_eq!(take_enter(&mut enter, "b", 10.2), Some(rect));
+        assert!(enter.is_none());
+        let mut stale = Some(Enter { diagram: "b".into(), from: rect, at: 10.0 });
+        assert_eq!(take_enter(&mut stale, "b", 10.0 + ENTER_TTL), None);
+        assert!(stale.is_none(), "an expired growth is dropped");
+    }
+
     #[test]
     fn camera_into_places_bounds_in_target() {
         let bounds = Rect { x: 0.0, y: 0.0, w: 400.0, h: 200.0 };
