@@ -40,6 +40,93 @@ struct CameraAnim {
     to: Camera,
 }
 
+/// Which way the user is moving through diagrams, so a switch can show it.
+///
+/// Set with [`DiagramCanvas::set_travel`] just before the switch; anything that is not a step
+/// (tree click, palette, restore) is a [`Travel::Jump`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Travel {
+    /// To the next diagram or later history: the new diagram arrives from the right.
+    Forward,
+    /// To the previous diagram or earlier history: the new diagram arrives from the left.
+    Back,
+    /// Anywhere else: the new diagram scales in without sliding.
+    #[default]
+    Jump,
+}
+
+impl Travel {
+    /// The travel of a step of `delta` places (positive is forward); no step is a jump.
+    pub fn from_step(delta: isize) -> Self {
+        match delta.signum() {
+            1 => Self::Forward,
+            -1 => Self::Back,
+            _ => Self::Jump,
+        }
+    }
+
+    /// `1.0` forward, `-1.0` back, `0.0` for a jump: the sign of the horizontal motion.
+    pub fn direction(self) -> f32 {
+        match self {
+            Self::Forward => 1.0,
+            Self::Back => -1.0,
+            Self::Jump => 0.0,
+        }
+    }
+}
+
+/// Largest diagram (in nodes) that is kept to slide out; bigger ones just give way, so a
+/// transition never paints two heavy scenes.
+pub const OUTGOING_LIMIT: usize = 1500;
+
+/// Whether a scene of `nodes` nodes is worth keeping to animate out.
+pub fn keeps_outgoing(nodes: usize) -> bool {
+    nodes <= OUTGOING_LIMIT
+}
+
+/// How far a slide covers, in points.
+const TRAVEL_DISTANCE: f32 = 32.0;
+/// Scale a jump starts from, about the viewport centre.
+const JUMP_FROM_SCALE: f32 = 0.985;
+
+/// Offsets, in points, of the (incoming, outgoing) diagrams at transition progress `p`
+/// (0 at the switch, 1 at rest). The incoming one slides in from the side of travel while the
+/// outgoing one leaves the other way; a jump does not slide.
+pub fn travel_offsets(travel: Travel, p: f32) -> (Vec2, Vec2) {
+    let d = travel.direction();
+    (Vec2::new(TRAVEL_DISTANCE * (1.0 - p) * d, 0.0), Vec2::new(-TRAVEL_DISTANCE * p * d, 0.0))
+}
+
+/// `camera` zoomed by `scale` so that the point `centre` (viewport-local) keeps showing the
+/// same world point.
+fn scaled_about(camera: Camera, centre: Vec2, scale: f32) -> Camera {
+    Camera {
+        x: centre.x - (centre.x - camera.x) * scale,
+        y: centre.y - (centre.y - camera.y) * scale,
+        zoom: camera.zoom * scale,
+    }
+}
+
+/// The diagram that is leaving: its picture, and the camera and travel it left with.
+struct Outgoing {
+    artifact: Arc<RenderArtifact>,
+    camera: Camera,
+    travel: Travel,
+}
+
+/// A scene as one layer of a frame: where its camera is and how opaque it is.
+struct Layer<'a> {
+    scene: &'a Scene,
+    camera: Camera,
+    opacity: f32,
+}
+
+/// Natural log of a zoom for the camera spring, with anything that is not a positive finite
+/// zoom read as the smallest one, so the spring can always come to rest.
+fn log_zoom(zoom: f32) -> f32 {
+    if zoom.is_finite() { zoom.max(MIN_ZOOM).ln() } else { MIN_ZOOM.ln() }
+}
+
 const MIN_LABEL_ZOOM: f32 = token::FONT_MONO / token::FONT_UI;
 const MAX_ZOOM: f32 = 16.0;
 const MIN_ZOOM: f32 = 0.000001;
@@ -99,6 +186,14 @@ pub struct DiagramCanvas {
     diagram_id: String,
     /// The artifact painted last, to carry the selection over to a new layout.
     shown: Option<Arc<RenderArtifact>>,
+    /// Travel announced for the next diagram switch; `None` means a jump.
+    pending_travel: Option<Travel>,
+    /// Travel of the transition that is running (or ran last).
+    travel: Travel,
+    /// The diagram sliding out while the new one arrives.
+    outgoing: Option<Outgoing>,
+    /// The camera the scene was last painted with, which is what an outgoing scene leaves with.
+    painted_camera: Camera,
     bounds: Option<Rect>,
     size: Vec2,
     restore_pending: bool,
@@ -143,6 +238,10 @@ impl Default for DiagramCanvas {
             artifact_id: String::new(),
             diagram_id: String::new(),
             shown: None,
+            pending_travel: None,
+            travel: Travel::Jump,
+            outgoing: None,
+            painted_camera: Camera::default(),
             bounds: None,
             size: Vec2::ZERO,
             restore_pending: false,
@@ -163,7 +262,8 @@ impl Default for DiagramCanvas {
     }
 }
 
-const APPEAR_ID: &str = "canvas-appear";
+/// Progress of the diagram transition, 0 at the switch and 1 at rest.
+const TRANSITION_ID: &str = "canvas-transition";
 const DIM_ID: &str = "canvas-dim";
 
 impl DiagramCanvas {
@@ -195,6 +295,13 @@ impl DiagramCanvas {
         self.fling = None;
         self.follow_fit = false;
         let from = self.camera;
+        // A target that is not a real camera must never keep the spring from resting.
+        let finite = |value: f32, fallback: f32| if value.is_finite() { value } else { fallback };
+        let to = Camera {
+            x: finite(to.x, from.x),
+            y: finite(to.y, from.y),
+            zoom: if to.zoom.is_finite() { to.zoom.max(MIN_ZOOM) } else { from.zoom },
+        };
         if (to.x - from.x).abs() < 0.1
             && (to.y - from.y).abs() < 0.1
             && (to.zoom - from.zoom).abs() < 0.001
@@ -210,7 +317,7 @@ impl DiagramCanvas {
         let anim = self.anim.get_or_insert_with(|| CameraAnim {
             x: SpringState { value: from.x, velocity: 0.0 },
             y: SpringState { value: from.y, velocity: 0.0 },
-            log_zoom: SpringState { value: from.zoom.ln(), velocity: 0.0 },
+            log_zoom: SpringState { value: log_zoom(from.zoom), velocity: 0.0 },
             to,
         });
         anim.to = to;
@@ -222,9 +329,9 @@ impl DiagramCanvas {
         let to = anim.to;
         motion::advance(&mut anim.x, to.x, motion::GLIDE, dt);
         motion::advance(&mut anim.y, to.y, motion::GLIDE, dt);
-        motion::advance(&mut anim.log_zoom, to.zoom.ln(), motion::GLIDE, dt);
+        motion::advance(&mut anim.log_zoom, log_zoom(to.zoom), motion::GLIDE, dt);
         let at_rest = |state: &SpringState, target: f32| state.value == target && state.velocity == 0.0;
-        if at_rest(&anim.x, to.x) && at_rest(&anim.y, to.y) && at_rest(&anim.log_zoom, to.zoom.ln()) {
+        if at_rest(&anim.x, to.x) && at_rest(&anim.y, to.y) && at_rest(&anim.log_zoom, log_zoom(to.zoom)) {
             self.camera = to;
             self.anim = None;
         } else {
@@ -232,6 +339,20 @@ impl DiagramCanvas {
         }
     }
 
+    /// Announces how the next different diagram is reached, for its transition. It is used by
+    /// the next switch and then forgotten, so unannounced switches are jumps.
+    pub fn set_travel(&mut self, travel: Travel) {
+        self.pending_travel = Some(travel);
+    }
+
+    /// Travel of the switch now under way: the announced one until the new diagram arrives,
+    /// then the one its transition runs with. The top bar reads it to slide the breadcrumb the
+    /// same way.
+    pub fn travel(&self) -> Travel {
+        self.pending_travel.unwrap_or(self.travel)
+    }
+
+    /// Whether the camera glides, the diagram transition runs, or dimming eases.
     pub fn is_animating(&self) -> bool {
         self.anim.is_some() || self.settling || self.fling.is_some()
     }
@@ -468,6 +589,12 @@ impl DiagramCanvas {
         };
         let scene = &artifact.rendered.scene;
 
+        // After being hidden (the page view) the canvas has no sensible camera to glide from:
+        // a fit then lands at once instead of sliding in from the corner.
+        let pass = ui.ctx().cumulative_pass_nr();
+        let fresh = self.last_pass.is_none_or(|last| pass > last + 2);
+        self.last_pass = Some(pass);
+
         if self.artifact_id != artifact.id {
             let different_diagram = self.diagram_id != artifact.diagram_id;
             self.artifact_id.clone_from(&artifact.id);
@@ -475,13 +602,17 @@ impl DiagramCanvas {
             self.bounds = Some(scene.bounds);
             self.painted_frames = 0;
             let previous = self.shown.take();
+            let announced = self.pending_travel.take();
             if different_diagram {
+                self.travel = announced.unwrap_or_default();
+                self.outgoing = previous
+                    .filter(|old| !fresh && keeps_outgoing(old.rendered.scene.nodes.len()))
+                    .map(|artifact| Outgoing { artifact, camera: self.painted_camera, travel: self.travel });
+                motion::restart(ui.ctx(), egui::Id::new(TRANSITION_ID));
                 self.selected = None;
                 self.selected_edge = None;
                 self.fade = Fade::default();
                 motion::restart(ui.ctx(), egui::Id::new(DIM_ID));
-                // A different diagram fades and rises in instead of popping.
-                motion::restart(ui.ctx(), egui::Id::new(APPEAR_ID));
                 if !self.restore_pending {
                     self.fit_pending = true;
                 }
@@ -491,11 +622,6 @@ impl DiagramCanvas {
             self.restore_pending = false;
         }
         self.shown = Some(artifact.clone());
-        // After being hidden (the page view) the canvas has no sensible camera to glide from:
-        // a fit then lands at once instead of sliding in from the corner.
-        let pass = ui.ctx().cumulative_pass_nr();
-        let fresh = self.last_pass.is_none_or(|last| pass > last + 2);
-        self.last_pass = Some(pass);
         if self.fit_pending {
             self.fit();
             if fresh && let Some(anim) = self.anim.take() {
@@ -702,22 +828,33 @@ impl DiagramCanvas {
                 dim,
             }
         };
-        let appear = motion::appear(ui.ctx(), egui::Id::new(APPEAR_ID), true, motion::BASE + 0.04);
-        self.settling = appear < 1.0 || motion::moving(ui.ctx(), egui::Id::new(DIM_ID));
-        let mut scene_painter = painter.clone();
-        scene_painter.multiply_opacity(appear);
-        let camera = Camera { y: self.camera.y + (1.0 - appear) * 10.0, ..self.camera };
-        let stats = paint::paint_scene(
-            &scene_painter,
-            viewport,
-            camera,
-            scene,
-            style,
-            dark,
-            p.accent,
-            &emphasis,
-            &mut self.scratch,
-        );
+        let progress = motion::spring_from(ui.ctx(), egui::Id::new(TRANSITION_ID), 0.0, 1.0, motion::GLIDE);
+        self.settling = progress < 1.0 || motion::moving(ui.ctx(), egui::Id::new(DIM_ID));
+        if progress >= 1.0 {
+            self.outgoing = None;
+        }
+        // The leaving diagram goes underneath, without any selection emphasis.
+        if let Some(out) = &self.outgoing {
+            let opacity = 1.0 - motion::fade((2.0 * progress).min(1.0));
+            if opacity > 0.0 {
+                let (_, offset) = travel_offsets(out.travel, progress);
+                let layer = Layer {
+                    scene: &out.artifact.rendered.scene,
+                    camera: Camera { x: out.camera.x + offset.x, y: out.camera.y + offset.y, ..out.camera },
+                    opacity,
+                };
+                let plain = Emphasis { selected: None, strong_nodes: &[], strong_edges: &[], matches: &[], dim: 0.0 };
+                paint_layer(&painter, viewport, &layer, style, dark, p.accent, &plain, &mut self.scratch);
+            }
+        }
+        let (offset, _) = travel_offsets(self.travel, progress);
+        let mut camera = Camera { x: self.camera.x + offset.x, y: self.camera.y + offset.y, ..self.camera };
+        if self.travel == Travel::Jump {
+            camera = scaled_about(camera, viewport.size() * 0.5, egui::lerp(JUMP_FROM_SCALE..=1.0, progress));
+        }
+        let layer = Layer { scene, camera, opacity: motion::fade(progress) };
+        let stats = paint_layer(&painter, viewport, &layer, style, dark, p.accent, &emphasis, &mut self.scratch);
+        self.painted_camera = self.camera;
         self.painted_frames = self.painted_frames.saturating_add(1);
         self.last_stats = Some(stats);
         // A quiet pill fades in while labels are hidden, above the zoom pill.
@@ -864,6 +1001,23 @@ pub fn paint_card(
     pressed
 }
 
+/// Paints one layer of the frame: its scene through its camera at its opacity.
+#[allow(clippy::too_many_arguments)]
+fn paint_layer(
+    painter: &egui::Painter,
+    viewport: egui::Rect,
+    layer: &Layer,
+    style: &StyleSheet,
+    dark: bool,
+    accent: Color32,
+    emphasis: &Emphasis,
+    scratch: &mut Vec<ItemId>,
+) -> paint::PaintStats {
+    let mut painter = painter.clone();
+    painter.multiply_opacity(layer.opacity);
+    paint::paint_scene(&painter, viewport, layer.camera, layer.scene, style, dark, accent, emphasis, scratch)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -882,5 +1036,56 @@ mod tests {
         let z4 = canvas.camera.zoom;
         canvas.tick_anim(1.0 / 60.0);
         assert!(z4 > z3 && canvas.camera.zoom - z4 >= z4 - z3, "momentum lost");
+    }
+
+    #[test]
+    fn travel_offsets_meet_at_rest() {
+        assert_eq!(travel_offsets(Travel::Forward, 1.0), (Vec2::ZERO, Vec2::new(-32.0, 0.0)));
+        assert_eq!(travel_offsets(Travel::Back, 0.0).0, Vec2::new(-32.0, 0.0));
+        assert_eq!(travel_offsets(Travel::Jump, 0.3), (Vec2::ZERO, Vec2::ZERO));
+    }
+
+    #[test]
+    fn outgoing_scene_skipped_when_large() {
+        assert!(keeps_outgoing(1500));
+        assert!(!keeps_outgoing(1501));
+    }
+
+    #[test]
+    fn stepping_maps_to_travel() {
+        assert_eq!(Travel::from_step(1), Travel::Forward);
+        assert_eq!(Travel::from_step(-1), Travel::Back);
+        assert_eq!(Travel::from_step(0), Travel::Jump);
+    }
+
+    #[test]
+    fn scaling_keeps_the_viewport_centre_fixed() {
+        let camera = Camera { x: 30.0, y: -12.0, zoom: 1.5 };
+        let centre = Vec2::new(400.0, 300.0);
+        let scaled = scaled_about(camera, centre, 0.985);
+        assert!((scaled.zoom - 1.5 * 0.985).abs() < 1e-6);
+        // The world point under the centre is the same before and after.
+        let world = |c: Camera| ((centre.x - c.x) / c.zoom, (centre.y - c.y) / c.zoom);
+        let (before, after) = (world(camera), world(scaled));
+        assert!((before.0 - after.0).abs() < 1e-3 && (before.1 - after.1).abs() < 1e-3);
+    }
+
+    #[test]
+    fn camera_glide_settles_whatever_the_target() {
+        for to in [
+            Camera { x: 10.0, y: 5.0, zoom: 0.0 },
+            Camera { x: 10.0, y: 5.0, zoom: -2.0 },
+            Camera { x: 10.0, y: 5.0, zoom: f32::NAN },
+            Camera { x: f32::NAN, y: f32::INFINITY, zoom: 1.0 },
+        ] {
+            let mut canvas = DiagramCanvas::default();
+            canvas.camera = Camera { x: 0.0, y: 0.0, zoom: 1.0 };
+            canvas.animate_to(to);
+            for _ in 0..600 {
+                canvas.tick_anim(1.0 / 60.0);
+            }
+            assert!(!canvas.is_animating(), "glide to {to:?} never settled");
+            assert!(canvas.camera.zoom.is_finite() && canvas.camera.zoom > 0.0);
+        }
     }
 }

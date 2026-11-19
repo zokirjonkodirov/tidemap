@@ -166,8 +166,8 @@ impl TidemapApp {
         self.canvas.restore_camera(self.state.views.get(&self.diagram_key()).and_then(|view|view.camera));self.canvas.selected=None;self.canvas.matches.clear();self.search_hits.clear();self.search_cursor=None;self.diagram_search.clear();self.editor_key.clear();self.sync_editor();self.schedule_render(false);self.record_state();self.prune_buffers();
     }
     pub(crate) fn select_block(&mut self,id:String){self.activate(self.active_file.clone(),Some(id),true);}
-    pub(crate) fn step_diagram(&mut self,delta:isize){let target=self.buffers.get(&self.active_file).and_then(|buffer|{let index=buffer.document.blocks.iter().position(|block|block.id==self.active_block)?;buffer.document.blocks.get(index.checked_add_signed(delta)?).map(|block|block.id.clone())});if let Some(id)=target{self.select_block(id);}}
-    pub(crate) fn history_step(&mut self,delta:isize){if let Some(index)=self.state.history_index.checked_add_signed(delta){if let Some(entry)=self.state.history.get(index).cloned(){self.state.history_index=index;self.open_document(entry.file_id,Some(entry.block_id),false);}}}
+    pub(crate) fn step_diagram(&mut self,delta:isize){let target=self.buffers.get(&self.active_file).and_then(|buffer|{let index=buffer.document.blocks.iter().position(|block|block.id==self.active_block)?;buffer.document.blocks.get(index.checked_add_signed(delta)?).map(|block|block.id.clone())});if let Some(id)=target{self.canvas.set_travel(crate::canvas::Travel::from_step(delta));self.select_block(id);}}
+    pub(crate) fn history_step(&mut self,delta:isize){if let Some(index)=self.state.history_index.checked_add_signed(delta){if let Some(entry)=self.state.history.get(index).cloned(){self.state.history_index=index;self.canvas.set_travel(crate::canvas::Travel::from_step(delta));self.open_document(entry.file_id,Some(entry.block_id),false);}}}
     pub(crate) fn restore_pending(&mut self){
         if self.shot_open.is_some()||self.shot_idle{return;}
         if !self.active_file.is_empty()||self.reads.values().any(|intent|intent.activate){return;}

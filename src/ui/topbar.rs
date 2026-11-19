@@ -1,11 +1,14 @@
 //! The slim top bar: navigation on the left, the breadcrumb, quiet actions on the right.
 
-use egui::{Align, Color32, Context, FontId, Id, Layout, Sense, UiBuilder, vec2};
+use std::sync::Arc;
+
+use egui::{Align, Color32, Context, FontId, Galley, Id, Layout, Painter, Pos2, Sense, UiBuilder, vec2};
 use tidemap_model::Theme;
 
 use super::{controls, info, surface};
 use crate::{
     app::TidemapApp,
+    canvas::Travel,
     icons::{self, Icon},
     motion,
     theme::{self, Palette, token},
@@ -23,6 +26,99 @@ const BLOCK_PAD: f32 = 8.0;
 const CHEVRON: f32 = 12.0;
 /// Diameter of the unsaved-changes dot.
 const DOT: f32 = 6.0;
+
+/// How far, in points, a breadcrumb label slides while it crossfades to its replacement.
+const LABEL_SHIFT: f32 = 6.0;
+
+/// What a crossfading label remembers between frames.
+#[derive(Clone)]
+struct LabelMemo {
+    /// What the label is about (the file or diagram shown); only a change of it animates.
+    key: String,
+    /// The label's text, before any truncation.
+    text: String,
+    /// The text being replaced, while the crossfade runs.
+    previous: Option<String>,
+    /// Sign of the horizontal slide: 1 forward, -1 back, 0 for none.
+    direction: f32,
+}
+
+/// A label that crossfades from its old text to its new one, sliding a few points along the
+/// direction of travel. Only geometry and opacity move; both texts are laid out at the normal
+/// size.
+struct Swapping {
+    new: Arc<Galley>,
+    old: Option<Arc<Galley>>,
+    /// Crossfade progress, 0 at the change and 1 once settled.
+    t: f32,
+    direction: f32,
+}
+
+impl Swapping {
+    /// The label `text` of the thing identified by `key`, drawn through `fit` (truncation).
+    ///
+    /// When `key` changes together with the text, the old text leaves and the new one arrives
+    /// along `travel`; a jump crossfades in place. Text edited under the same key (a title
+    /// being typed) changes at once.
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        ctx: &Context,
+        painter: &Painter,
+        id: Id,
+        key: &str,
+        text: &str,
+        travel: Travel,
+        font: &FontId,
+        color: Color32,
+        fit: &dyn Fn(&str) -> String,
+    ) -> Self {
+        let mut memo = ctx.data(|data| data.get_temp::<LabelMemo>(id)).unwrap_or_else(|| LabelMemo {
+            key: key.to_owned(),
+            text: text.to_owned(),
+            previous: None,
+            direction: 0.0,
+        });
+        if memo.text != text {
+            if memo.key != key {
+                memo.previous = Some(std::mem::replace(&mut memo.text, text.to_owned()));
+                memo.direction = travel.direction();
+                motion::restart(ctx, id);
+            }
+            text.clone_into(&mut memo.text);
+        }
+        key.clone_into(&mut memo.key);
+        let t = if memo.previous.is_some() { motion::spring_from(ctx, id, 0.0, 1.0, motion::SOFT) } else { 1.0 };
+        let old = memo.previous.as_deref().filter(|_| t < 1.0).map(|previous| painter.layout_no_wrap(fit(previous), font.clone(), color));
+        if old.is_none() {
+            memo.previous = None;
+        }
+        let direction = memo.direction;
+        ctx.data_mut(|data| data.insert_temp(id, memo));
+        Self { new: painter.layout_no_wrap(fit(text), font.clone(), color), old, t, direction }
+    }
+
+    /// The width to give the label: it eases from the old text's width to the new one's.
+    fn width(&self) -> f32 {
+        let new = self.new.size().x;
+        self.old.as_ref().map_or(new, |old| old.size().x + (new - old.size().x) * self.t)
+    }
+
+    /// Paints the label with its left edge at `left` and its middle at `middle`.
+    fn paint(&self, painter: &Painter, left: f32, middle: f32, color: Color32) {
+        let t = self.t.clamp(0.0, 1.0);
+        let draw = |galley: &Arc<Galley>, shift: f32, opacity: f32| {
+            let mut painter = painter.clone();
+            painter.multiply_opacity(opacity);
+            painter.galley(Pos2::new(left + shift, middle - galley.size().y * 0.5), galley.clone(), color);
+        };
+        if let Some(old) = &self.old {
+            draw(old, -LABEL_SHIFT * self.direction * t, 1.0 - t);
+            draw(&self.new, LABEL_SHIFT * self.direction * (1.0 - t), t);
+        } else {
+            draw(&self.new, 0.0, 1.0);
+        }
+    }
+}
 
 /// The pieces of the breadcrumb, as plain text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -234,8 +330,20 @@ fn breadcrumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, open: &Open, 
         ui.label(egui::RichText::new(folder).font(small.clone()).color(p.secondary));
         ui.label(egui::RichText::new(separator).font(small.clone()).color(p.muted));
     }
-    let file = fit_text(&name_width, &crumb.file, file_budget, false);
-    ui.label(egui::RichText::new(file).font(name_font).color(p.ink));
+    let travel = app.canvas.travel();
+    let file = Swapping::new(
+        ui.ctx(),
+        &painter,
+        Id::new("crumb-file-swap"),
+        &app.active_file,
+        &crumb.file,
+        travel,
+        &name_font,
+        p.ink,
+        &|text| fit_text(&name_width, text, file_budget, false),
+    );
+    let (file_rect, _) = ui.allocate_exact_size(vec2(file.width(), BLOCK_HEIGHT), Sense::hover());
+    file.paint(ui.painter(), file_rect.left(), file_rect.center().y, p.ink);
     if open.dirty {
         let (rect, _) = ui.allocate_exact_size(vec2(DOT, token::CONTROL), Sense::hover());
         // Pops in the first time the file turns dirty.
@@ -356,8 +464,19 @@ fn block_button(
         }
     }
 
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), p.secondary);
-    let width = galley.size().x + 2.0 * BLOCK_PAD + ui.spacing().item_spacing.x + CHEVRON;
+    let travel = app.canvas.travel();
+    let swap = Swapping::new(
+        &ctx,
+        ui.painter(),
+        Id::new("crumb-block-swap"),
+        &format!("{} {}", app.active_file, app.active_block),
+        label,
+        travel,
+        font,
+        p.secondary,
+        &str::to_owned,
+    );
+    let width = swap.width() + 2.0 * BLOCK_PAD + ui.spacing().item_spacing.x + CHEVRON;
     let (rect, response) = ui.allocate_exact_size(vec2(width, BLOCK_HEIGHT), Sense::click());
     let mut is_open = was_open && chosen.is_none();
     if response.clicked() {
@@ -374,8 +493,7 @@ fn block_button(
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
-    let text_pos = egui::pos2(rect.left() + BLOCK_PAD, rect.center().y - galley.size().y * 0.5);
-    ui.painter().galley(text_pos, galley, p.secondary);
+    swap.paint(ui.painter(), rect.left() + BLOCK_PAD, rect.center().y, p.secondary);
     let chevron = egui::Rect::from_center_size(
         egui::pos2(rect.right() - BLOCK_PAD - CHEVRON * 0.5, rect.center().y),
         vec2(CHEVRON, CHEVRON),
