@@ -354,6 +354,10 @@ pub fn apply(ctx: &Context, theme: Theme) -> bool {
 
     ctx.style_mut(|style| {
         style.animation_time = token::EASE_SECONDS;
+        // Tooltips wait a beat before appearing and stay quick to follow while moving between
+        // controls.
+        style.interaction.tooltip_delay = 0.35;
+        style.interaction.tooltip_grace_time = 0.6;
         style.spacing.item_spacing = vec2(token::SPACE[1], token::SPACE[1]);
         style.spacing.button_padding = vec2(token::SPACE[2], token::SPACE[0] + 2.0);
         style.spacing.interact_size = vec2(token::CONTROL, token::CONTROL);

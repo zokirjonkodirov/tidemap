@@ -1,12 +1,17 @@
 //! The info popover, the status dot on its button and the toast.
 
 use egui::{
-    Align2, Area, Color32, Context, FontId, Id, Margin, Order, Painter, Rect, RichText, Sense, Ui, UiBuilder, pos2, vec2,
+    Align2, Area, Color32, Context, FontId, Id, LayerId, Margin, Order, Painter, Pos2, Rect, RichText, Sense, Ui,
+    UiBuilder, pos2, vec2,
 };
+use egui::emath::TSTransform;
 use tidemap_diagram::Span;
 use tidemap_model::DiagnosticKind;
 
-use super::controls::{primary_button, quiet_button};
+use super::{
+    controls::{primary_button, quiet_button},
+    surface,
+};
 use crate::{
     app::{Dialog, TidemapApp},
     icons::{self, Icon},
@@ -346,31 +351,39 @@ fn apply(app: &mut TidemapApp, actions: Actions) {
     }
 }
 
-/// The popover under the Info button. `anchor` is that button's rectangle.
+/// The popover under the Info button. `anchor` is that button's rectangle. It unfolds from the
+/// button's bottom-right corner and folds back into it.
 pub fn show(app: &mut TidemapApp, ctx: &Context, anchor: Rect, p: Palette) {
-    let appear_id = Id::new("info-popover-appear");
-    if !app.info_open || app.dialog.is_some() || app.palette_open {
-        motion::restart(ctx, appear_id);
+    let id = Id::new("info-popover");
+    let layer = LayerId::new(Order::Foreground, id);
+    let open = app.info_open && app.dialog.is_none() && !app.palette_open;
+    let Some(t) = motion::presence(ctx, id.with("presence"), open) else {
+        // Gone: drop the layer transform so the next opening starts clean.
+        surface::animate_layer(ctx, layer, 1.0, Pos2::ZERO, surface::POPOVER);
         return;
+    };
+    let shown_t = if open { t } else { surface::exit_t(t) };
+    surface::animate_layer(ctx, layer, shown_t, anchor.right_bottom(), surface::POPOVER);
+    if !open {
+        surface::release_focus(ctx, layer);
     }
-    // Unfolds from the button: fades in while settling 6 px down into place.
-    let t = motion::appear(ctx, appear_id, true, motion::BASE);
     let facts = facts(app);
     let mut actions = Actions::default();
-    let area = Area::new(Id::new("info-popover"))
+    let area = Area::new(id)
         .order(Order::Foreground)
         .fade_in(false)
         .pivot(Align2::RIGHT_TOP)
-        .fixed_pos(pos2(
-            ctx.content_rect().right() - token::INSET,
-            anchor.bottom() + token::SPACE[0] - 6.0 * (1.0 - t),
-        ))
+        .fixed_pos(pos2(ctx.content_rect().right() - token::INSET, anchor.bottom() + token::SPACE[0]))
+        .interactable(open)
         .show(ctx, |ui| {
-            ui.multiply_opacity(t);
+            ui.multiply_opacity(motion::fade(t));
             theme::elevated(ui, p, theme::Level::Overlay, token::RADIUS_PANEL, Margin::same(PADDING), |ui| {
                 contents(ui, p, &facts, &mut actions)
             });
         });
+    if !open {
+        return;
+    }
     let clicked_outside = ctx.input(|input| {
         input.pointer.any_click()
             && input
@@ -384,33 +397,60 @@ pub fn show(app: &mut TidemapApp, ctx: &Context, anchor: Rect, p: Palette) {
     apply(app, actions);
 }
 
-/// The toast for one-off results, at the bottom-left of the canvas. It rises in, and fades
-/// out over the last part of its life instead of vanishing.
+/// How far a leaving toast sinks while it fades.
+const TOAST_SINK: f32 = 6.0;
+
+/// The toast that is on screen (or leaving): its text and when it was shown.
+type ToastMemo = (String, std::time::Instant);
+
+/// The toast for one-off results, at the bottom-left of the canvas. It grows from its corner
+/// and, once its time is up, fades while sinking a few pixels instead of vanishing.
 pub fn toast(app: &TidemapApp, ctx: &Context, canvas: Rect, p: Palette) {
-    let Some((text, shown)) = &app.toast else {
+    let memo_key = Id::new("toast-memo");
+    let presence_key = Id::new("toast-presence");
+    // The app drops the toast when its time is up; keep the last one to draw it leaving.
+    let current = app.toast.clone();
+    let remembered = ctx.data(|data| data.get_temp::<ToastMemo>(memo_key));
+    let shown = current.clone().or_else(|| remembered.clone());
+    if let Some(memo) = &current {
+        if remembered.as_ref().is_none_or(|(_, previous)| *previous != memo.1) {
+            // A new toast: enter again from the start.
+            motion::restart(ctx, presence_key);
+        }
+        ctx.data_mut(|data| data.insert_temp(memo_key, memo.clone()));
+    }
+    let open = current.is_some();
+    let layer = surface::toast_layer();
+    let Some(t) = motion::presence(ctx, presence_key, open) else {
+        ctx.set_transform_layer(layer, surface::pushed(ctx));
         return;
     };
-    let age = shown.elapsed().as_secs_f32();
-    let life = crate::app::TOAST_LIFETIME.as_secs_f32();
-    let enter = motion::ease_out((age / motion::BASE).min(1.0));
-    let leave = motion::ease_out(((life - age) / 0.35).clamp(0.0, 1.0));
-    let t = enter.min(leave);
-    if t < 1.0 {
-        ctx.request_repaint();
-    }
+    let Some((text, _)) = shown else {
+        return;
+    };
+    let origin = canvas.left_bottom() + vec2(token::SPACE[3], -token::SPACE[3]);
+    // Entering: grow from the corner. Leaving: no scale, just sink a little.
+    let own = if open {
+        surface::transform(t, origin, surface::TOAST)
+    } else {
+        TSTransform::from_translation(vec2(0.0, TOAST_SINK * (1.0 - t)))
+    };
+    ctx.set_transform_layer(layer, surface::pushed(ctx) * own);
     Area::new(Id::new("toast"))
         .order(Order::Tooltip)
         .fade_in(false)
         .pivot(Align2::LEFT_BOTTOM)
-        .fixed_pos(canvas.left_bottom() + vec2(token::SPACE[3], -token::SPACE[3] + 10.0 * (1.0 - enter)))
+        .fixed_pos(origin)
         .interactable(false)
         .show(ctx, |ui| {
-            ui.multiply_opacity(t);
+            ui.multiply_opacity(motion::fade(t));
             let margin = Margin::symmetric(PADDING, token::SPACE[2] as i8);
             theme::elevated(ui, p, theme::Level::Raised, token::RADIUS_PANEL, margin, |ui| {
                 ui.set_max_width(TOAST_WIDTH);
-                ui.add(egui::Label::new(RichText::new(text).size(token::FONT_UI).color(p.ink)).wrap());
+                ui.add(egui::Label::new(RichText::new(&text).size(token::FONT_UI).color(p.ink)).wrap());
             });
         });
-    ctx.request_repaint_after(crate::app::TOAST_LIFETIME.saturating_sub(shown.elapsed()));
+    if let Some((_, since)) = &app.toast {
+        ctx.request_repaint_after(crate::app::TOAST_LIFETIME.saturating_sub(since.elapsed()));
+    }
 }

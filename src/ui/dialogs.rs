@@ -9,7 +9,10 @@ use tidemap_model::{ExportFormat, Theme};
 use tidemap_renderer::export;
 
 pub use super::controls::{danger_button, primary_button, quiet_button};
-use super::controls::{key_caps, segmented, switch};
+use super::{
+    controls::{key_caps, segmented, switch},
+    surface,
+};
 use crate::{
     app::{Dialog, TidemapApp},
     motion,
@@ -39,61 +42,99 @@ pub fn dialog_surface<R>(ui: &mut Ui, p: Palette, add: impl FnOnce(&mut Ui) -> R
     theme::elevated(ui, p, theme::Level::Modal, token::RADIUS_DIALOG, Margin::same(DIALOG_PADDING), add)
 }
 
-/// Shows whichever dialogs are open.
-pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) {
+/// Ctx-data key of the dialog that was open last, so it can be drawn while it leaves.
+fn last_dialog_key() -> Id {
+    Id::new("workspace-dialog").with("last")
+}
+
+/// Id of the presence spring of the dialog area `id`.
+fn presence_id(id: &'static str) -> Id {
+    Id::new(id).with("presence")
+}
+
+/// Shows whichever dialogs are open (or still leaving). Returns the strongest presence among
+/// them (0 when none is showing), so the frame can sink the window behind it.
+pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) -> f32 {
+    let mut strongest = 0.0_f32;
     if let Some(dialog) = app.dialog {
-        let width = match dialog {
-            Dialog::Help => SHORTCUTS_WIDTH,
-            Dialog::Diagnostics => DIAGNOSTICS_WIDTH,
-            _ => WIDTH,
-        };
-        let modal = show_modal(ctx, "workspace-dialog", p, |ui| {
-            ui.set_width(width);
-            match dialog {
-                Dialog::Settings => settings(app, ui, p),
-                Dialog::Help => shortcuts(app, ui, p),
-                Dialog::Diagnostics => diagnostics(app, ui, ctx, p),
-                Dialog::Export => export_dialog(app, ui, p),
-                Dialog::Close => close_dialog(app, ui, ctx, p),
-            }
-        });
-        if modal.backdrop_response.clicked() {
-            app.dialog = None;
-        }
-    } else {
-        settle("workspace-dialog", ctx);
+        ctx.data_mut(|data| data.insert_temp(last_dialog_key(), dialog));
     }
+    let leaving = ctx.data(|data| data.get_temp::<Dialog>(last_dialog_key()));
+    let open = app.dialog.is_some();
+    if let Some(t) = motion::presence(ctx, presence_id("workspace-dialog"), open) {
+        // A leaving dialog is drawn from the last one that was open.
+        if let Some(dialog) = app.dialog.or(leaving) {
+            let width = match dialog {
+                Dialog::Help => SHORTCUTS_WIDTH,
+                Dialog::Diagnostics => DIAGNOSTICS_WIDTH,
+                _ => WIDTH,
+            };
+            let shown = surface_modal(ctx, "workspace-dialog", p, t, open, |ui, interactive| {
+                ui.set_width(width);
+                match dialog {
+                    Dialog::Settings => settings(app, ui, p),
+                    Dialog::Help => shortcuts(app, ui, p),
+                    Dialog::Diagnostics => diagnostics(app, ui, ctx, p, interactive),
+                    Dialog::Export => export_dialog(app, ui, p),
+                    Dialog::Close => close_dialog(app, ui, ctx, p),
+                }
+            });
+            if open && shown.backdrop_clicked {
+                app.dialog = None;
+            }
+        }
+        strongest = strongest.max(t);
+    }
+    // Recovery and conflict are enter-only: their state is gone once they close.
     if let Some(id) = app.recovery_file.clone() {
-        recovery(app, ctx, p, id);
+        strongest = strongest.max(recovery(app, ctx, p, id));
     } else {
-        settle("recover-source", ctx);
+        rest(ctx, "recover-source");
     }
     if let Some(id) = app.conflict_file.clone() {
-        conflict(app, ctx, p, id);
+        strongest = strongest.max(conflict(app, ctx, p, id));
     } else {
-        settle("external-conflict", ctx);
+        rest(ctx, "external-conflict");
     }
+    strongest
 }
 
-/// A closed dialog forgets its entrance, so the next opening animates again.
-fn settle(id: &'static str, ctx: &Context) {
-    motion::restart(ctx, Id::new(id).with("appear"));
+/// A closed enter-only dialog lets its presence spring settle at 0, so the next opening
+/// animates in again.
+fn rest(ctx: &Context, id: &'static str) {
+    let _ = motion::presence(ctx, presence_id(id), false);
 }
 
-/// A dialog over the scrim. It fades in while rising 8 px into place; the scrim fades with it.
-fn show_modal<R>(ctx: &Context, id: &'static str, p: Palette, add: impl FnOnce(&mut Ui) -> R) -> egui::ModalResponse<R> {
-    let t = motion::appear(ctx, Id::new(id).with("appear"), true, motion::BASE);
-    let area = egui::Modal::default_area(Id::new(id))
-        .fade_in(false)
-        .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 8.0 * (1.0 - t)));
-    egui::Modal::new(Id::new(id))
-        .area(area)
-        .frame(Frame::NONE)
-        .backdrop_color(p.scrim.gamma_multiply(t))
-        .show(ctx, |ui| {
-            ui.multiply_opacity(t);
-            dialog_surface(ui, p, add).inner
-        })
+/// A dialog over the scrim, growing from the screen centre while open and shrinking back as it
+/// leaves.
+fn surface_modal<R>(
+    ctx: &Context,
+    id: &'static str,
+    p: Palette,
+    t: f32,
+    open: bool,
+    add: impl FnOnce(&mut Ui, bool) -> R,
+) -> surface::Shown<R> {
+    let place = surface::Placement {
+        id: Id::new(id),
+        anchor: egui::Align2::CENTER_CENTER,
+        offset: egui::Vec2::ZERO,
+        origin: ctx.content_rect().center(),
+        enter: surface::DIALOG,
+    };
+    surface::modal(ctx, p, place, t, open, |ui, interactive| dialog_surface(ui, p, |ui| add(ui, interactive)).inner)
+}
+
+/// A dialog that only ever enters: its state is gone the moment it closes. Returns its
+/// presence along with what the content returned.
+fn show_modal<R>(
+    ctx: &Context,
+    id: &'static str,
+    p: Palette,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (f32, surface::Shown<R>) {
+    let t = motion::presence(ctx, presence_id(id), true).unwrap_or(1.0);
+    (t, surface_modal(ctx, id, p, t, true, |ui, _| add(ui)))
 }
 
 fn title(ui: &mut Ui, text: &str) {
@@ -429,7 +470,7 @@ fn shortcuts(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
 // Diagnostics
 // ---------------------------------------------------------------------------
 
-fn diagnostics(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
+fn diagnostics(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette, interactive: bool) {
     title(ui, "Diagnostics");
     note(ui, "Local runtime information. Diagram source is not included.", p.muted);
     ui.add_space(token::SPACE[2]);
@@ -437,6 +478,7 @@ fn diagnostics(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
         egui::ScrollArea::both().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
             ui.add(
                 egui::TextEdit::multiline(&mut app.diagnostics_text)
+                    .interactive(interactive)
                     .font(egui::TextStyle::Monospace)
                     .frame(false)
                     .desired_width(f32::INFINITY)
@@ -487,13 +529,13 @@ fn close_dialog(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
 // Recovery and conflict
 // ---------------------------------------------------------------------------
 
-fn recovery(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
+fn recovery(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) -> f32 {
     let Some(info) = app.recovery_info(&id) else {
         app.recovery_file = None;
-        return;
+        return 0.0;
     };
     let (mut recover, mut discard) = (false, false);
-    show_modal(ctx, "recover-source", p, |ui| {
+    let (t, _) = show_modal(ctx, "recover-source", p, |ui| {
         ui.set_width(WIDTH);
         title(ui, "Pick up where you left off");
         body(ui, p, &format!("There are unsaved changes for {}.", info.name));
@@ -513,16 +555,17 @@ fn recovery(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
     } else if discard {
         app.use_disk_version(id);
     }
+    t
 }
 
-fn conflict(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
+fn conflict(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) -> f32 {
     let Some(info) = app.conflict_info(&id) else {
         app.conflict_file = None;
-        return;
+        return 0.0;
     };
     let width = (ctx.content_rect().width() - 2.0 * WINDOW_MARGIN).clamp(WIDTH, 980.0);
     let (mut keep, mut reload, mut copy) = (false, false, false);
-    let modal = show_modal(ctx, "external-conflict", p, |ui| {
+    let (t, modal) = show_modal(ctx, "external-conflict", p, |ui| {
         ui.set_width(width);
         title(ui, "This file changed on disk");
         body(ui, p, &format!("{} has a different version on disk. Your work is safe; review both before continuing.", info.name));
@@ -540,7 +583,7 @@ fn conflict(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
             ui.add_enabled_ui(!info.deleted, |ui| reload = danger_button(ui, "Discard my edits and reload").clicked());
         });
     });
-    if keep || modal.backdrop_response.clicked() {
+    if keep || modal.backdrop_clicked {
         app.conflict_file = None;
     }
     if reload {
@@ -549,6 +592,7 @@ fn conflict(app: &mut TidemapApp, ctx: &Context, p: Palette, id: String) {
     if copy {
         app.save(id, true);
     }
+    t
 }
 
 /// A read-only, scrollable box with a caption, used to compare two versions.

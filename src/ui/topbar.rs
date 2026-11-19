@@ -3,7 +3,7 @@
 use egui::{Align, Color32, Context, FontId, Id, Layout, Sense, UiBuilder, vec2};
 use tidemap_model::Theme;
 
-use super::info;
+use super::{info, surface};
 use crate::{
     app::TidemapApp,
     icons::{self, Icon},
@@ -248,7 +248,42 @@ fn breadcrumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, open: &Open, 
     }
 }
 
+const MENU_OPEN: &str = "block-menu-open";
+const MENU_INDEX: &str = "block-menu-index";
+const MENU_BAND: &str = "block-menu-band";
+const MENU_PRESENCE: &str = "block-menu-presence";
+/// Height of a row in the diagram menu.
+const MENU_ROW: f32 = 32.0;
+/// Padding at the sides of a menu row.
+const MENU_PAD: f32 = 12.0;
+/// Narrowest and widest the diagram menu gets.
+const MENU_WIDTH: std::ops::RangeInclusive<f32> = 240.0..=360.0;
+/// Tallest the diagram menu gets before it scrolls.
+const MENU_MAX_HEIGHT: f32 = 320.0;
+
+/// Whether the diagram menu is open.
+pub fn block_menu_open(ctx: &Context) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(Id::new(MENU_OPEN))).unwrap_or(false)
+}
+
+fn set_block_menu_open(ctx: &Context, open: bool) {
+    ctx.data_mut(|data| data.insert_temp(Id::new(MENU_OPEN), open));
+}
+
+/// Closes the diagram menu if it is open. Returns whether it was (so Esc can stop there).
+pub fn close_block_menu(ctx: &Context) -> bool {
+    let was = block_menu_open(ctx);
+    if was {
+        set_block_menu_open(ctx, false);
+    }
+    was
+}
+
 /// The quiet button that names the active diagram and opens the list of the file's diagrams.
+///
+/// The menu is ours rather than egui's popup so it can grow from the button and be driven from
+/// the keyboard: Up and Down move, Enter picks, Esc (see `palette::escape`) or a click outside
+/// closes. Its keys are taken only while it is open.
 fn block_button(
     app: &mut TidemapApp,
     ui: &mut egui::Ui,
@@ -257,11 +292,56 @@ fn block_button(
     label: &str,
     font: &FontId,
 ) {
+    let ctx = ui.ctx().clone();
+    let count = open.blocks.len();
+    let active = open.blocks.iter().position(|(id, _)| *id == app.active_block).unwrap_or(0);
+    // A modal over the window takes the menu with it.
+    if app.palette_open || app.dialog.is_some() {
+        set_block_menu_open(&ctx, false);
+    }
+    let was_open = block_menu_open(&ctx);
+    let mut index = ctx
+        .data(|data| data.get_temp::<usize>(Id::new(MENU_INDEX)))
+        .unwrap_or(active)
+        .min(count.saturating_sub(1));
+
+    // Keys come first: taking Enter here keeps the focused button from also reading it.
+    let mut chosen = None;
+    let mut moved = false;
+    if was_open && count > 0 {
+        let (down, up, enter) = ctx.input_mut(|input| {
+            (
+                input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                input.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+            )
+        });
+        if down {
+            index = (index + 1) % count;
+        }
+        if up {
+            index = (index + count - 1) % count;
+        }
+        moved = down || up;
+        if enter {
+            chosen = open.blocks.get(index).map(|(id, _)| id.clone());
+        }
+    }
+
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), p.secondary);
     let width = galley.size().x + 2.0 * BLOCK_PAD + ui.spacing().item_spacing.x + CHEVRON;
     let (rect, response) = ui.allocate_exact_size(vec2(width, BLOCK_HEIGHT), Sense::click());
-    let popup_open = egui::Popup::is_id_open(ui.ctx(), response.id.with("popup"));
-    let hover = motion::hover(ui.ctx(), response.id, response.hovered() || popup_open);
+    let mut is_open = was_open && chosen.is_none();
+    if response.clicked() {
+        is_open = !is_open;
+        if is_open {
+            // Every opening starts on the active diagram, with the band already there.
+            index = active;
+            motion::restart(&ctx, Id::new(MENU_BAND));
+        }
+    }
+    // The button keeps its hovered look for as long as its menu is open.
+    let hover = motion::hover(&ctx, response.id, response.hovered() || is_open);
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
@@ -272,26 +352,133 @@ fn block_button(
         vec2(CHEVRON, CHEVRON),
     );
     icons::paint(ui.painter(), Icon::ChevronDown, chevron, p.secondary);
-    let response = response
-        .on_hover_text("Diagrams in this file · [ and ] step through them")
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    if !is_open {
+        response.on_hover_text("Diagrams in this file \u{b7} [ and ] step through them");
+    }
 
-    let mut chosen = None;
-    egui::Popup::menu(&response).id(response.id.with("popup")).show(|ui| {
-        ui.set_min_width(240.0);
-        ui.set_max_width(360.0);
-        for (id, title) in &open.blocks {
-            let active = *id == app.active_block;
-            let text = egui::RichText::new(title).size(token::FONT_SMALL);
-            if ui.selectable_label(active, text).clicked() {
-                chosen = Some(id.clone());
-                ui.close();
-            }
-        }
-    });
+    // The menu stays drawn while it leaves, but only an open one takes input.
+    let mut outside = false;
+    if let Some(t) = motion::presence(&ctx, Id::new(MENU_PRESENCE), is_open && count > 0) {
+        let menu = MenuState { t, interactive: is_open, anchor: rect, moved };
+        let (picked, area) = block_menu(&ctx, p, open, &app.active_block, &mut index, menu);
+        chosen = chosen.or(picked);
+        outside = is_open
+            && ctx.input(|input| {
+                input.pointer.any_click()
+                    && input.pointer.interact_pos().is_some_and(|pos| !area.contains(pos) && !rect.contains(pos))
+            });
+    } else {
+        // Gone: drop the layer transform so the next opening starts clean.
+        let layer = egui::LayerId::new(egui::Order::Foreground, Id::new("block-menu"));
+        surface::animate_layer(&ctx, layer, 1.0, rect.left_bottom(), surface::POPOVER);
+    }
+    if chosen.is_some() || outside {
+        is_open = false;
+    }
+    ctx.data_mut(|data| data.insert_temp(Id::new(MENU_INDEX), index));
+    set_block_menu_open(&ctx, is_open);
     if let Some(id) = chosen {
         app.select_block(id);
     }
+}
+
+/// What the diagram menu needs to know about this frame.
+struct MenuState {
+    /// Presence of the menu (0 to 1).
+    t: f32,
+    /// False while the menu leaves: it draws but takes no input.
+    interactive: bool,
+    /// The button the menu hangs from.
+    anchor: egui::Rect,
+    /// The keyboard moved the selection this frame (scroll it into view).
+    moved: bool,
+}
+
+/// Draws the diagram menu under its button: a raised surface of 32 px rows with a band on the
+/// selected one. It unfolds from the button's bottom-left corner. Returns the diagram that was
+/// clicked and the menu's rectangle.
+fn block_menu(
+    ctx: &Context,
+    p: Palette,
+    open: &Open,
+    active_block: &str,
+    index: &mut usize,
+    menu: MenuState,
+) -> (Option<String>, egui::Rect) {
+    let id = Id::new("block-menu");
+    let layer = egui::LayerId::new(egui::Order::Foreground, id);
+    let shown_t = if menu.interactive { menu.t } else { surface::exit_t(menu.t) };
+    surface::animate_layer(ctx, layer, shown_t, menu.anchor.left_bottom(), surface::POPOVER);
+    if !menu.interactive {
+        surface::release_focus(ctx, layer);
+    }
+    let inset = token::SPACE[1];
+    let font = FontId::proportional(token::FONT_SMALL);
+    let widest = open
+        .blocks
+        .iter()
+        .map(|(_, title)| ctx.fonts_mut(|fonts| fonts.layout_no_wrap(title.clone(), font.clone(), Color32::WHITE).size().x))
+        .fold(0.0_f32, f32::max);
+    // Room for the padding on both sides, the check mark and the inset of the surface.
+    let width = (widest + 2.0 * MENU_PAD + 24.0 + 2.0 * inset).clamp(*MENU_WIDTH.start(), *MENU_WIDTH.end());
+    let band_at = motion::spring(ctx, Id::new(MENU_BAND), *index as f32, motion::SOFT);
+    let mut picked = None;
+    let area = egui::Area::new(id)
+        .order(egui::Order::Foreground)
+        .fade_in(false)
+        .fixed_pos(menu.anchor.left_bottom() + vec2(0.0, token::SPACE[0]))
+        .interactable(menu.interactive)
+        .show(ctx, |ui| {
+            ui.multiply_opacity(motion::fade(menu.t));
+            theme::elevated(ui, p, theme::Level::Overlay, token::RADIUS_PANEL, egui::Margin::same(inset as i8), |ui| {
+                ui.set_width(width - 2.0 * inset);
+                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                egui::ScrollArea::vertical().max_height(MENU_MAX_HEIGHT).auto_shrink([false, true]).show(ui, |ui| {
+                    let top = ui.cursor().top() + band_at * MENU_ROW;
+                    let band = egui::Rect::from_min_size(
+                        egui::pos2(ui.max_rect().left(), top),
+                        vec2(ui.available_width(), MENU_ROW),
+                    );
+                    ui.painter().rect_filled(band, token::RADIUS_CONTROL, p.accent_soft);
+                    for (row, (block, title)) in open.blocks.iter().enumerate() {
+                        let current = block == active_block;
+                        let response = menu_row(ui, p, title, current, row == *index, &font);
+                        if menu.interactive && response.hovered() && ui.input(|input| input.pointer.is_moving()) {
+                            *index = row;
+                        }
+                        if menu.moved && row == *index {
+                            response.scroll_to_me(None);
+                        }
+                        if menu.interactive && response.clicked() {
+                            picked = Some(block.clone());
+                        }
+                    }
+                });
+            });
+        });
+    (picked, area.response.rect)
+}
+
+/// One row of the diagram menu. The active diagram is set in the accent colour and carries a
+/// check mark.
+fn menu_row(ui: &mut egui::Ui, p: Palette, title: &str, current: bool, selected: bool, font: &FontId) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), MENU_ROW), Sense::click());
+    let mark = egui::Rect::from_center_size(egui::pos2(rect.right() - MENU_PAD - 8.0, rect.center().y), vec2(16.0, 16.0));
+    let budget = (mark.left() - MENU_PAD - rect.left() - 4.0).max(0.0);
+    let color = if current {
+        p.accent
+    } else if selected {
+        p.ink
+    } else {
+        p.secondary
+    };
+    let galley = super::palette::elided(ui, title, font.clone(), color, budget, false);
+    ui.painter().galley(egui::pos2(rect.left() + MENU_PAD, rect.center().y - galley.size().y * 0.5), galley, color);
+    if current {
+        icons::paint(ui.painter(), Icon::Check, mark, p.accent);
+    }
+    response
 }
 
 fn right_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {

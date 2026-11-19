@@ -22,6 +22,7 @@ pub mod pill;
 pub mod sidebar;
 pub mod source;
 pub mod states;
+pub mod surface;
 pub mod topbar;
 pub mod tree;
 
@@ -147,9 +148,12 @@ pub fn frame(app: &mut TidemapApp, ctx: &Context) {
     }
     states::search_overlay(app, ctx, canvas, p);
     info::show(app, ctx, app.info_anchor, p);
+    let palette = palette::show(app, ctx, p);
+    let dialogs = dialogs::show(app, ctx, p);
+    // The window sinks behind whichever modal is more present. This runs before the toast,
+    // which composes the same transform with its own entrance.
+    surface::push_back(ctx, palette.max(dialogs).clamp(0.0, 1.0));
     info::toast(app, ctx, canvas, p);
-    palette::show(app, ctx, p);
-    dialogs::show(app, ctx, p);
 }
 
 /// A rounded white card with the standard padding. `margin` is the backdrop gap around it.

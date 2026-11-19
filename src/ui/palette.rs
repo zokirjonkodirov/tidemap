@@ -7,7 +7,7 @@ use egui::{
 };
 use tidemap_model::{FileEntry, RecentWorkspace};
 
-use super::controls::key_cap;
+use super::{controls::key_cap, surface};
 use crate::{
     app::TidemapApp,
     icons::{self, Icon},
@@ -420,9 +420,18 @@ pub fn shortcuts(app: &mut TidemapApp, ctx: &Context) {
     }
 }
 
-/// Esc closes one thing per press: palette, dialog, info popover, diagram search, selection.
+/// Esc closes one thing per press: the diagram menu, palette, dialog, info popover, diagram search, selection.
 /// Returns true when it did. The sidebar handles its own Esc while it has the keyboard.
 fn escape(app: &mut TidemapApp, ctx: &Context) -> bool {
+    // The diagram menu is the topmost thing: Esc closes it before anything else.
+    if super::topbar::block_menu_open(ctx)
+        && !app.palette_open
+        && app.dialog.is_none()
+        && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
+    {
+        super::topbar::close_block_menu(ctx);
+        return true;
+    }
     if app.sidebar_focused && !app.palette_open && app.dialog.is_none() {
         return false;
     }
@@ -474,49 +483,57 @@ fn current_results(app: &TidemapApp) -> Vec<Hit> {
     results(&app.palette_query, files, &app.state.pins, &recent, MAX_RESULTS)
 }
 
-const APPEAR_ID: &str = "palette-appear";
+const PRESENCE_ID: &str = "palette-presence";
 const HIGHLIGHT_ID: &str = "palette-highlight";
+const INPUT_ID: &str = "palette-input";
 
-pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) {
-    if !app.palette_open {
-        // Closed: forget the entrance so the next opening animates again.
-        motion::restart(ctx, Id::new(APPEAR_ID));
-        return;
-    }
-    let t = motion::appear(ctx, Id::new(APPEAR_ID), true, motion::BASE);
+/// Shows the palette while it is open or still leaving. Returns its presence (0 when closed)
+/// so the frame can sink the window behind it.
+pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) -> f32 {
+    let Some(t) = motion::presence(ctx, Id::new(PRESENCE_ID), app.palette_open) else {
+        return 0.0;
+    };
+    let open = app.palette_open;
     let screen = ctx.content_rect();
     let width = PANEL_WIDTH.min(screen.width() - 2.0 * token::SPACE[4]);
-    // Drops in from a little above its resting place while it fades in.
-    let top = (screen.height() * 0.18).round() - 10.0 * (1.0 - t);
-    let area = egui::Modal::default_area(Id::new("palette"))
-        .fade_in(false)
-        .anchor(Align2::CENTER_TOP, vec2(0.0, top));
-    let mut chosen: Option<Hit> = None;
-    let modal = egui::Modal::new(Id::new("palette"))
-        .area(area)
-        .frame(egui::Frame::NONE)
-        .backdrop_color(p.scrim.gamma_multiply(t))
-        .show(ctx, |ui| {
-            ui.multiply_opacity(t);
-            theme::elevated(ui, p, theme::Level::Modal, token::RADIUS_DIALOG, Margin::ZERO, |ui| {
-                ui.set_width(width);
-                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                chosen = contents(app, ui, ctx, p);
-            });
-        });
-    if modal.backdrop_response.clicked() {
-        app.palette_open = false;
+    let top = (screen.height() * 0.18).round();
+    let place = surface::Placement {
+        id: Id::new("palette"),
+        anchor: Align2::CENTER_TOP,
+        offset: vec2(0.0, top),
+        // Grows from the top centre, where the eye already is.
+        origin: egui::pos2(screen.center().x, top),
+        enter: surface::PALETTE,
+    };
+    let shown = surface::modal(ctx, p, place, t, open, |ui, interactive| {
+        theme::elevated(ui, p, theme::Level::Modal, token::RADIUS_DIALOG, Margin::ZERO, |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            contents(app, ui, ctx, p, interactive)
+        })
+        .inner
+    });
+    if open {
+        if shown.backdrop_clicked {
+            app.palette_open = false;
+        }
+        if let Some(hit) = shown.inner {
+            app.palette_open = false;
+            app.open_hit(hit);
+        }
     }
-    if let Some(hit) = chosen {
-        app.palette_open = false;
-        app.open_hit(hit);
-    }
+    t
 }
 
-fn contents(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> Option<Hit> {
+/// The palette's contents. While `interactive` is false (the palette is leaving) it only
+/// draws: no keys are taken, no focus is requested and the text field is not editable.
+fn contents(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette, interactive: bool) -> Option<Hit> {
     // Keys are taken before the text field sees them (it would move its cursor instead).
     let empty_query = app.palette_query.is_empty();
-    let (down, up, page_down, page_up, enter, delete, back) = ctx.input_mut(|input| {
+    let (down, up, page_down, page_up, enter, delete, back) = if !interactive {
+        (false, false, false, false, false, false, false)
+    } else {
+        ctx.input_mut(|input| {
         (
             input.consume_key(Modifiers::NONE, Key::ArrowDown) || input.consume_key(Modifiers::CTRL, Key::N),
             input.consume_key(Modifiers::NONE, Key::ArrowUp),
@@ -526,8 +543,9 @@ fn contents(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> Opt
             app.palette_mode == PaletteMode::Projects && input.consume_key(Modifiers::NONE, Key::Delete),
             app.palette_mode == PaletteMode::Projects && empty_query && input.consume_key(Modifiers::NONE, Key::Backspace),
         )
-    });
-    if app.palette_fresh {
+        })
+    };
+    if interactive && app.palette_fresh {
         // A fresh opening: the highlight starts on its row instead of gliding from the last one.
         motion::restart(ctx, Id::new(HIGHLIGHT_ID));
     }
@@ -537,7 +555,7 @@ fn contents(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> Opt
         app.palette_index = 0;
         motion::restart(ctx, Id::new(HIGHLIGHT_ID));
     }
-    let changed = input_row(app, ui, ctx, p);
+    let changed = input_row(app, ui, ctx, p, interactive);
     if changed {
         app.palette_index = 0;
         motion::restart(ctx, Id::new(HIGHLIGHT_ID));
@@ -627,7 +645,7 @@ fn empty_message(app: &TidemapApp) -> String {
 }
 
 /// The search icon and the text field. Returns true when the text changed.
-fn input_row(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> bool {
+fn input_row(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette, interactive: bool) -> bool {
     let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), INPUT_HEIGHT), Sense::hover());
     let icon = Rect::from_center_size(egui::pos2(row.left() + 16.0 + 8.0, row.center().y), vec2(16.0, 16.0));
     let (glyph, placeholder) = match app.palette_mode {
@@ -636,9 +654,10 @@ fn input_row(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> bo
     };
     icons::paint(ui.painter(), glyph, icon, p.muted);
     let field = Rect::from_min_max(egui::pos2(icon.right() + 12.0, row.top()), egui::pos2(row.right() - 16.0, row.bottom()));
-    let id = Id::new("palette-input");
+    let id = Id::new(INPUT_ID);
     let edit = egui::TextEdit::singleline(&mut app.palette_query)
         .id(id)
+        .interactive(interactive)
         .font(FontId::proportional(16.0))
         .hint_text(RichText::new(placeholder).size(16.0).color(p.muted))
         .frame(false)
@@ -646,6 +665,9 @@ fn input_row(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) -> bo
         .vertical_align(egui::Align::Center)
         .desired_width(field.width());
     let response = ui.put(field, edit);
+    if !interactive {
+        return false;
+    }
     if app.palette_fresh {
         app.palette_fresh = false;
         // Pre-filled text ("> ") is not selected: the cursor goes to its end.

@@ -344,10 +344,10 @@ pub fn press(ctx: &Context, id: Id, down: bool) -> f32 {
 /// Presence of a surface that opens and closes: springs in from 0 with a small pop when
 /// `open`, springs out quickly when closed, and returns `None` once fully closed so the
 /// caller can stop drawing it. Reopening mid-exit continues from the current position and
-/// momentum.
+/// momentum. The value is never negative: a closing spring that undershoots 0 reads as 0.
 pub fn presence(ctx: &Context, id: Id, open: bool) -> Option<f32> {
     let (target, feel) = if open { (1.0, POP) } else { (0.0, SNAP) };
-    let value = spring_at(ctx, spring_key(id, "presence"), 0.0, target, feel);
+    let value = spring_at(ctx, spring_key(id, "presence"), 0.0, target, feel).max(0.0);
     (open || value > 0.0).then_some(value)
 }
 
@@ -477,6 +477,30 @@ mod tests {
         let mut gone = Some(1.0);
         for f in 65..=200 { at(&ctx, f as f64 / 60.0, |c| gone = presence(c, id, false)); }
         assert_eq!(gone, None);
+    }
+
+    #[test]
+    fn presence_is_never_negative() {
+        // A guard on the `max(0.0)` in `presence`: whatever momentum a close or a reopen
+        // carries, the reported value never dips below 0 (it is a scale and an opacity).
+        // Close until nearly gone, then reopen, at several depths.
+        for threshold in [0.12, 0.08, 0.05, 0.03, 0.02, 0.01, 0.005] {
+            let ctx = Context::default();
+            let id = Id::new("neg");
+            for f in 0..=60 { at(&ctx, f as f64 / 60.0, |c| { presence(c, id, true); }); }
+            let mut f = 61;
+            let mut value = 1.0;
+            while value > threshold {
+                at(&ctx, f as f64 / 120.0 + 0.5, |c| value = presence(c, id, false).unwrap_or(0.0));
+                f += 1;
+            }
+            let mut lowest = f32::MAX;
+            for _ in 0..60 {
+                at(&ctx, f as f64 / 120.0 + 0.5, |c| lowest = lowest.min(presence(c, id, true).unwrap()));
+                f += 1;
+            }
+            assert!(lowest >= 0.0, "threshold {threshold}: presence went negative: {lowest}");
+        }
     }
 
     #[test]
