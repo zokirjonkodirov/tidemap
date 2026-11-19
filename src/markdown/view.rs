@@ -50,6 +50,10 @@ const CELL_PAD_X: f32 = 12.0;
 const CELL_PAD_Y: f32 = 8.0;
 /// Layout work past the screen edge is bounded to this many milliseconds a frame.
 const AHEAD_BUDGET_MS: f64 = 3.0;
+/// How often (in frames) laid-out leaves are checked for ones to forget, and how long unused
+/// ones are kept.
+const PRUNE_EVERY: u64 = 60;
+const SLOT_IDLE_FRAMES: u64 = 120;
 
 const MAX_MATCHES: usize = 20_000;
 
@@ -139,10 +143,13 @@ enum Drag {
 pub struct DocView {
     key: Option<(String, u64)>,
     doc: Arc<Doc>,
+    /// The width the page is laid out at (see [`WidthSettle`]).
     width: f32,
+    settle: WidthSettle,
     heights: Vec<f32>,
     tops: Vec<f32>,
-    height_cache: HashMap<u64, f32>,
+    /// Measured heights by leaf and width, with the (rounded) width they were measured at.
+    height_cache: HashMap<u64, (u32, f32)>,
     slots: HashMap<u64, (Arc<Slot>, u64)>,
     /// The font-atlas epoch and display scale `slots` were laid out under.
     laid_out: (u64, f32),
@@ -151,6 +158,8 @@ pub struct DocView {
     stale: HashMap<String, Arc<RenderArtifact>>,
     requested: HashMap<u64, (f64, f64)>,
     frame: u64,
+    /// The frame `slots` were last pruned on.
+    pruned: u64,
     scroll_y: f32,
     target_y: f32,
     file: String,
@@ -187,6 +196,7 @@ impl Default for DocView {
             key: None,
             doc: Arc::new(Doc::default()),
             width: 0.0,
+            settle: WidthSettle::default(),
             heights: Vec::new(),
             tops: vec![0.0],
             height_cache: HashMap::new(),
@@ -196,6 +206,7 @@ impl Default for DocView {
             stale: HashMap::new(),
             requested: HashMap::new(),
             frame: 0,
+            pruned: 0,
             scroll_y: 0.0,
             target_y: 0.0,
             file: String::new(),
@@ -230,6 +241,72 @@ fn well(p: Palette) -> Color32 {
 
 fn key_of(leaf: &Leaf, width: f32) -> u64 {
     leaf.hash ^ ((width.round() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+}
+
+/// Decides which column width the page is laid out at while the space it is given changes.
+///
+/// A side panel sliding or the card margins easing changes the available width on every frame
+/// of the animation; laying everything out at each intermediate width would re-wrap every
+/// visible leaf and re-fit every embedded diagram for sizes that are never seen at rest. So the
+/// layout keeps its width until the available one has held still for [`Self::SETTLE_FRAMES`]
+/// frames in a row.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct WidthSettle {
+    /// The width the page is laid out at; zero before the first layout.
+    layout: f32,
+    /// The available width last seen, and how many frames in a row it has held.
+    candidate: f32,
+    stable_frames: u8,
+}
+
+impl WidthSettle {
+    /// Frames the available width must hold before the layout follows it.
+    const SETTLE_FRAMES: u8 = 2;
+    /// Width differences below this are not a change (the slot keys round to whole pixels).
+    const TOLERANCE: f32 = 0.5;
+
+    /// Takes this frame's available width; returns the width to lay out at and whether that
+    /// width just changed (so heights must be rebuilt).
+    fn next(&mut self, available: f32) -> (f32, bool) {
+        if self.layout <= 0.0 {
+            *self = Self { layout: available, candidate: available, stable_frames: 0 };
+            return (available, true);
+        }
+        if (available - self.layout).abs() <= Self::TOLERANCE {
+            self.candidate = self.layout;
+            self.stable_frames = 0;
+            return (self.layout, false);
+        }
+        if (available - self.candidate).abs() <= Self::TOLERANCE {
+            self.stable_frames = self.stable_frames.saturating_add(1);
+        } else {
+            self.candidate = available;
+            self.stable_frames = 1;
+        }
+        if self.stable_frames >= Self::SETTLE_FRAMES {
+            *self = Self { layout: self.candidate, candidate: self.candidate, stable_frames: 0 };
+            return (self.layout, true);
+        }
+        (self.layout, false)
+    }
+
+    /// A different width is waiting to be adopted; the page must be shown again to resolve it.
+    fn pending(&self) -> bool {
+        (self.candidate - self.layout).abs() > Self::TOLERANCE
+    }
+}
+
+/// Moves the scroll position and its target together when the leaf at the top of the view
+/// moved from `scroll` to `moved` because heights above it were corrected. Shifting both keeps
+/// a smooth scroll (or a find reveal) heading for the same content instead of cancelling it.
+/// `limit` is the bottom of the anchor leaf: if that leaf itself shrank, the position stops
+/// there rather than following into the leaf below.
+fn shift_scroll(scroll: f32, target: f32, moved: f32, limit: f32) -> (f32, f32) {
+    let delta = moved.min(limit) - scroll;
+    if delta.abs() <= 0.01 {
+        return (scroll, target);
+    }
+    (scroll + delta, target + delta)
 }
 
 fn font_for(style: u8, size: f32, heading: bool) -> FontId {
@@ -541,7 +618,7 @@ impl DocView {
                 let doc = self.doc.clone();
                 let height_of = |this: &Self, index: usize| {
                     let leaf = &doc.leaves[index];
-                    this.height_cache.get(&key_of(leaf, width)).copied().unwrap_or_else(|| estimate(leaf, width))
+                    this.cached_height(leaf, width).unwrap_or_else(|| estimate(leaf, width))
                 };
                 let fresh: Vec<f32> = (splice.at..splice.at + splice.inserted).map(|i| height_of(self, i)).collect();
                 self.heights.splice(splice.at..splice.at + splice.removed, fresh);
@@ -586,6 +663,7 @@ impl DocView {
             self.scroll_y = self.tops[found] + offset;
             self.target_y = self.scroll_y;
         }
+        self.prune_per_leaf();
     }
 
     /// The leaf at the top of the viewport: its hash, the scroll offset into it and its index.
@@ -600,7 +678,7 @@ impl DocView {
 
     /// Forgets laid-out text after egui rebuilt its font atlas: the galleys point into the old
     /// one. A new display scale can also change how lines wrap, so then the measured heights
-    /// go too (the width check in `show` re-measures them).
+    /// go too (the settle in `show` then adopts the width afresh and re-measures them).
     fn drop_stale_galleys(&mut self, ctx: &Context) {
         let laid_out = (crate::text::epoch(ctx), ctx.pixels_per_point());
         if laid_out == self.laid_out {
@@ -609,9 +687,36 @@ impl DocView {
         if laid_out.1 != self.laid_out.1 {
             self.height_cache.clear();
             self.width = 0.0;
+            self.settle = WidthSettle::default();
         }
         self.slots.clear();
         self.laid_out = laid_out;
+    }
+
+    /// Drops laid-out leaves not drawn for a while: widths the page no longer has, or text far
+    /// from the view. Cheap enough to run every few dozen frames, like the editor's galleys.
+    fn prune_slots(&mut self) {
+        if self.frame < self.pruned + PRUNE_EVERY {
+            return;
+        }
+        self.pruned = self.frame;
+        let keep = self.frame.saturating_sub(SLOT_IDLE_FRAMES);
+        self.slots.retain(|_, (_, used)| *used >= keep);
+    }
+
+    /// Forgets per-leaf state of leaves the document no longer has.
+    fn prune_per_leaf(&mut self) {
+        if self.hscroll.is_empty() && self.artifacts.is_empty() {
+            return;
+        }
+        let alive: std::collections::HashSet<u64> = self.doc.leaves.iter().map(|leaf| leaf.hash).collect();
+        self.hscroll.retain(|hash, _| alive.contains(hash));
+        self.artifacts.retain(|hash, _| alive.contains(hash));
+    }
+
+    /// The height of `leaf` last measured at `width`, if any.
+    fn cached_height(&self, leaf: &Leaf, width: f32) -> Option<f32> {
+        self.height_cache.get(&key_of(leaf, width)).map(|(_, height)| *height)
     }
 
     fn rebuild_heights(&mut self, width: f32) {
@@ -620,8 +725,11 @@ impl DocView {
         self.heights = doc
             .leaves
             .iter()
-            .map(|leaf| self.height_cache.get(&key_of(leaf, width)).copied().unwrap_or_else(|| estimate(leaf, width)))
+            .map(|leaf| self.cached_height(leaf, width).unwrap_or_else(|| estimate(leaf, width)))
             .collect();
+        // Heights measured at other widths will not be wanted again at rest.
+        let at = width.round() as u32;
+        self.height_cache.retain(|_, (w, _)| *w == at);
         self.recompute_tops();
     }
 
@@ -781,6 +889,7 @@ impl DocView {
         let ctx = ui.ctx().clone();
         self.frame += 1;
         self.drop_stale_galleys(&ctx);
+        self.prune_slots();
         if self.dir.as_deref() != input.dir {
             self.dir = input.dir.map(std::path::Path::to_path_buf);
             self.images.retry_failed();
@@ -796,14 +905,14 @@ impl DocView {
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 0.0, canvas);
 
-        let width = (rect.width() - 2.0 * MARGIN_X).clamp(160.0, MAX_WIDTH);
-        let col_x = rect.left() + ((rect.width() - width) * 0.5).max(0.0);
+        let available = (rect.width() - 2.0 * MARGIN_X).clamp(160.0, MAX_WIDTH);
         let now = ctx.input(|i| i.time);
         let view_h = rect.height();
 
         if self.file != input.file_id {
             self.file = input.file_id.to_owned();
             self.key = None;
+            self.settle = WidthSettle::default();
             self.artifacts.clear();
             self.stale.clear();
             self.requested.clear();
@@ -812,9 +921,16 @@ impl DocView {
             self.last_active = input.active_block.to_owned();
             self.sel = None;
         }
+        // While the space is changing the page keeps its layout width and may overhang by a few
+        // pixels (the painter is clipped); it follows once the space holds still.
+        let (width, resized) = self.settle.next(available);
+        if self.settle.pending() {
+            ctx.request_repaint();
+        }
+        let col_x = rect.left() + ((rect.width() - width) * 0.5).max(0.0);
         if self.key.as_ref().map(|(file, rev)| (file.as_str(), *rev)) != Some((input.file_id, input.revision)) {
             self.reload(input, width);
-        } else if (self.width - width).abs() > 0.5 {
+        } else if resized {
             let anchor = self.anchor();
             self.rebuild_heights(width);
             if let Some((_, offset, index)) = anchor {
@@ -966,7 +1082,7 @@ impl DocView {
                     this.heights[index] = height;
                     changed = true;
                 }
-                this.height_cache.insert(key_of(&doc.leaves[index], width), height);
+                this.height_cache.insert(key_of(&doc.leaves[index], width), (width.round() as u32, height));
             };
             self.request_diagrams(&doc, first.saturating_sub(4), (last + 12).min(count), input, engine, next_job, now);
             for index in first..=last {
@@ -996,13 +1112,7 @@ impl DocView {
                 if let Some((_, offset, index)) = anchor {
                     // Heights above the viewport changed: keep the anchor leaf where it was.
                     let moved = self.tops[index] + offset;
-                    if (moved - self.scroll_y).abs() > 0.01 && index < first {
-                        self.target_y += moved - self.scroll_y;
-                        self.scroll_y = moved;
-                    } else if index < self.tops.len() - 1 && (moved - self.scroll_y).abs() > 0.01 {
-                        self.scroll_y = moved.min(self.tops[index + 1]);
-                        self.target_y = self.scroll_y;
-                    }
+                    (self.scroll_y, self.target_y) = shift_scroll(self.scroll_y, self.target_y, moved, self.tops[index + 1]);
                 }
                 ctx.request_repaint();
             }
@@ -1962,6 +2072,181 @@ mod tests {
         let engine = Engine::new(Arc::new(|| {}), font, StyleSheet::default());
         let blocks = tidemap_core::source::extract_diagrams(content, "t.md", &[]);
         (ctx, engine, blocks)
+    }
+
+    /// A page view run frame by frame at a chosen window width.
+    struct Harness {
+        ctx: Context,
+        engine: Engine,
+        blocks: Vec<DiagramBlock>,
+        content: String,
+        style: StyleSheet,
+        view: DocView,
+        next_job: u64,
+        time: f64,
+    }
+
+    impl Harness {
+        fn new(content: String) -> Self {
+            let (ctx, engine, blocks) = rig(&content);
+            Self { ctx, engine, blocks, content, style: StyleSheet::default(), view: DocView::default(), next_job: 1, time: 0.0 }
+        }
+
+        fn frame(&mut self, window_width: f32) {
+            self.time += 0.016;
+            let mut raw = RawInput::default();
+            raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(window_width, 800.0)));
+            raw.time = Some(self.time);
+            let Self { ctx, engine, blocks, content, style, view, next_job, .. } = self;
+            let _ = ctx.run(raw, |ctx| {
+                crate::text::observe(ctx);
+                egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
+                    let input = Input {
+                        file_id: "f",
+                        content,
+                        dir: None,
+                        revision: 1,
+                        blocks,
+                        active_block: "",
+                        p: theme::palette(false),
+                        dark: false,
+                        style,
+                        saved_scroll: 0.0,
+                    };
+                    view.show(ui, &input, engine, next_job);
+                });
+                crate::text::settle(ctx);
+            });
+        }
+
+        /// Whether the slot of `leaf` laid out at `width` is cached.
+        fn has_slot(&self, leaf: &Leaf, width: f32) -> bool {
+            self.view.slots.contains_key(&(key_of(leaf, width) ^ (theme::palette(false).ink.r() as u64) << 56))
+        }
+    }
+
+    #[test]
+    fn width_settle_adopts_the_first_width_at_once() {
+        let mut settle = WidthSettle::default();
+        assert_eq!(settle.next(736.0), (736.0, true));
+        assert!(!settle.pending());
+    }
+
+    #[test]
+    fn width_settle_ignores_a_glide_and_follows_when_it_stops() {
+        let mut settle = WidthSettle::default();
+        settle.next(736.0);
+        for width in [730.0, 700.0, 660.0, 620.0, 580.0] {
+            assert_eq!(settle.next(width), (736.0, false), "still gliding at {width}");
+            assert!(settle.pending());
+        }
+        assert_eq!(settle.next(580.0), (580.0, true), "held for two frames");
+        assert!(!settle.pending());
+        assert_eq!(settle.next(580.0), (580.0, false));
+    }
+
+    #[test]
+    fn width_settle_treats_repeated_and_sub_pixel_widths_as_no_change() {
+        let mut settle = WidthSettle::default();
+        settle.next(500.0);
+        for width in [500.0, 500.3, 499.8, 500.0] {
+            assert_eq!(settle.next(width), (500.0, false));
+            assert!(!settle.pending());
+        }
+        // A blip that returns to the layout width never counts.
+        assert_eq!(settle.next(450.0), (500.0, false));
+        assert_eq!(settle.next(500.0), (500.0, false));
+        assert_eq!(settle.next(450.0), (500.0, false));
+    }
+
+    #[test]
+    fn shifting_the_scroll_moves_the_target_with_it() {
+        assert_eq!(shift_scroll(1000.0, 5000.0, 1040.0, 1200.0), (1040.0, 5040.0));
+        assert_eq!(shift_scroll(1000.0, 5000.0, 960.0, 1200.0), (960.0, 4960.0));
+        assert_eq!(shift_scroll(1000.0, 5000.0, 1000.005, 1200.0), (1000.0, 5000.0), "noise is ignored");
+        // The anchor leaf itself shrank: stop at its bottom and keep the same distance to go.
+        assert_eq!(shift_scroll(1000.0, 5000.0, 1300.0, 1200.0), (1200.0, 5200.0));
+    }
+
+    #[test]
+    fn a_panel_glide_does_not_relayout_every_frame() {
+        let mut rig = Harness::new(big_doc(150));
+        rig.frame(800.0);
+        rig.frame(800.0);
+        let start = rig.view.width;
+        assert_eq!(start, 736.0);
+        // A side panel sliding in: the window narrows a little every frame.
+        let mut glide = Vec::new();
+        for step in 1..=12 {
+            let window = 800.0 - 10.0 * step as f32;
+            rig.frame(window);
+            glide.push(window);
+            assert_eq!(rig.view.width, start, "frame {step} of the glide kept the layout width");
+        }
+        let settled = glide.last().unwrap() - 2.0 * MARGIN_X;
+        rig.frame(*glide.last().unwrap());
+        rig.frame(*glide.last().unwrap());
+        rig.frame(*glide.last().unwrap());
+        assert_eq!(rig.view.width, settled, "the width was adopted once it held still");
+        // Only the width before and the width after were ever laid out.
+        let doc = rig.view.doc.clone();
+        for window in &glide[..glide.len() - 1] {
+            let width = window - 2.0 * MARGIN_X;
+            assert!(doc.leaves.iter().all(|leaf| !rig.has_slot(leaf, width)), "a slot was laid out at the intermediate width {width}");
+        }
+        assert!(doc.leaves.iter().any(|leaf| rig.has_slot(leaf, start)));
+        assert!(doc.leaves.iter().any(|leaf| rig.has_slot(leaf, settled)));
+    }
+
+    #[test]
+    fn page_caches_stay_bounded() {
+        let mut rig = Harness::new(big_doc(150));
+        rig.frame(900.0);
+        // Many widths, each held long enough to be adopted, while scrolling through the page.
+        for (i, window) in (0..30).map(|i| 500.0 + 13.0 * i as f32).enumerate() {
+            for _ in 0..3 {
+                rig.frame(window);
+            }
+            rig.view.target_y = rig.view.scroll_y + 400.0 * (i % 4) as f32;
+            rig.view.scroll_y = rig.view.target_y;
+        }
+        for _ in 0..200 {
+            rig.frame(700.0);
+        }
+        let leaves = rig.view.doc.leaves.len();
+        let width = rig.view.width;
+        assert!(rig.view.slots.len() <= leaves, "slots: {} for {leaves} leaves", rig.view.slots.len());
+        assert!(rig.view.height_cache.len() <= leaves, "height cache: {} for {leaves} leaves", rig.view.height_cache.len());
+        assert!(rig.view.height_cache.values().all(|(w, _)| *w == width.round() as u32), "heights for an old width survived");
+        assert!(rig.view.hscroll.is_empty() || rig.view.hscroll.len() <= leaves);
+    }
+
+    #[test]
+    fn height_corrections_keep_a_smooth_scroll_going() {
+        let mut rig = Harness::new(big_doc(150));
+        for _ in 0..3 {
+            rig.frame(800.0);
+        }
+        rig.view.scroll_y = 3000.0;
+        rig.view.target_y = 3000.0;
+        for _ in 0..10 {
+            rig.frame(800.0);
+        }
+        // A smooth scroll (PageDown held, say) is under way.
+        rig.view.target_y = rig.view.scroll_y + 6000.0;
+        for _ in 0..3 {
+            rig.frame(800.0);
+        }
+        let (scroll, target) = (rig.view.scroll_y, rig.view.target_y);
+        assert!(target - scroll > 1000.0, "the scroll is still far from its target: {scroll} -> {target}");
+        // The leaf just above the viewport turns out to be taller than estimated.
+        let above = rig.view.tops.partition_point(|top| *top <= scroll).saturating_sub(2);
+        rig.view.heights[above] += 40.0;
+        rig.view.recompute_tops();
+        rig.frame(800.0);
+        let (after_scroll, after_target) = (rig.view.scroll_y, rig.view.target_y);
+        assert!(after_scroll > scroll - 50.0, "the view did not jump back: {scroll} -> {after_scroll}");
+        assert!(after_target - after_scroll > 1000.0, "the correction cancelled the smooth scroll: {after_scroll} -> {after_target}");
     }
 
     #[test]
