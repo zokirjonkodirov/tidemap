@@ -3,7 +3,7 @@
 //! The global egui visuals draw no widget strokes, so anything that has to read as a control
 //! (switch, segmented choice, key cap, button) is painted here from the palette.
 
-use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, Ui, vec2};
+use egui::{Color32, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, emath::TSTransform, vec2};
 
 use crate::motion;
 use crate::theme::{self, Palette, token};
@@ -39,9 +39,20 @@ pub fn pressed_rect(rect: Rect, press: f32) -> Rect {
     Rect::from_center_size(rect.center(), rect.size() * press_scale(press))
 }
 
-/// `font` with its size scaled for press amount `press`, so a label shrinks with its fill.
-pub fn pressed_font(font: FontId, press: f32) -> FontId {
-    FontId { size: font.size * press_scale(press), ..font }
+/// Paints `text` centred on `centre`, scaled about that point for press amount `press`.
+///
+/// The galley is laid out once at the normal size and the finished shape is scaled as
+/// geometry, so a press never rasterises new glyph sizes into the font atlas. At rest the
+/// text is painted untransformed.
+pub fn paint_pressed_label(painter: &egui::Painter, centre: Pos2, text: &str, font: FontId, color: Color32, press: f32) {
+    let galley = painter.layout_no_wrap(text.to_owned(), font, color);
+    let pos = centre - galley.size() * 0.5;
+    let mut shape = egui::epaint::TextShape::new(pos, galley, color);
+    if press != 0.0 {
+        let scale = press_scale(press);
+        shape.transform(TSTransform::new(centre.to_vec2() * (1.0 - scale), scale));
+    }
+    painter.add(shape);
 }
 
 fn medium() -> FontId {
@@ -71,7 +82,7 @@ fn text_button(ui: &mut Ui, text: &str, fill: Color32, hover: Color32, color: Co
     let radius = token::RADIUS_CONTROL * press_scale(press);
     ui.painter().rect_filled(pressed_rect(rect, press), radius, fill.lerp_to_gamma(hover, over));
     let color = if enabled { color } else { p.muted };
-    ui.painter().text(rect.center(), Align2::CENTER_CENTER, text, pressed_font(medium(), press), color);
+    paint_pressed_label(ui.painter(), rect.center(), text, medium(), color, press);
     focus_ring(ui, &response, rect, token::RADIUS_CONTROL, p);
     response
 }
@@ -187,13 +198,8 @@ pub fn segmented<T: Copy + PartialEq>(
         } else {
             (egui::FontFamily::Proportional, p.secondary)
         };
-        ui.painter().text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            *label,
-            pressed_font(FontId::new(token::FONT_UI, family), press),
-            color,
-        );
+        let font = FontId::new(token::FONT_UI, family);
+        paint_pressed_label(ui.painter(), rect.center(), label, font, color, press);
         focus_ring(ui, &response, rect, inner_radius, p);
         if response.clicked() && !selected {
             *value = *candidate;
@@ -234,5 +240,14 @@ mod tests {
     fn press_scale_spans_four_percent() {
         assert_eq!(press_scale(0.0), 1.0);
         assert!((press_scale(1.0) - 0.96).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pressed_rect_is_identity_at_rest_and_keeps_its_centre() {
+        let rect = Rect::from_min_size(egui::pos2(10.0, 20.0), vec2(80.0, 32.0));
+        assert_eq!(pressed_rect(rect, 0.0), rect);
+        let pressed = pressed_rect(rect, 1.0);
+        assert_eq!(pressed.center(), rect.center());
+        assert!((pressed.width() - 80.0 * 0.96).abs() < 1e-4);
     }
 }

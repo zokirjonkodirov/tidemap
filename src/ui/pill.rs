@@ -129,13 +129,7 @@ fn zoom_label(ui: &mut Ui, p: Palette, text: &str, enabled: bool) -> egui::Respo
         ui.painter().rect_filled(controls::pressed_rect(rect, press), radius, p.hover.gamma_multiply(hover));
     }
     let color = if enabled { p.ink } else { p.muted };
-    ui.painter().text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        text,
-        controls::pressed_font(FontId::proportional(token::FONT_SMALL), press),
-        color,
-    );
+    controls::paint_pressed_label(ui.painter(), rect.center(), text, FontId::proportional(token::FONT_SMALL), color, press);
     if enabled {
         response.on_hover_text("Actual size · 1")
     } else {
