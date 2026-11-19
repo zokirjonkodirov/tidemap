@@ -151,8 +151,8 @@ pub struct Shown<R> {
 ///
 /// While `open` it is an [`egui::Modal`] over a scrim of `p.scrim` faded by `t`; the content
 /// is drawn with a visual transform (shapes only, so input is not moved during the short
-/// entrance). While leaving it is a plain, inert [`Area`] at the same place with the scrim
-/// painted inside it. `add` gets `open` as its `interactive` flag: when false it must not take
+/// entrance). While leaving it is a plain, inert [`Area`] at the same place (it keeps its layer
+/// order, and lets pointer and keys through to the window) with the scrim painted inside it. `add` gets `open` as its `interactive` flag: when false it must not take
 /// keys, request focus or build editable widgets.
 pub fn modal<R>(
     ctx: &Context,
@@ -179,8 +179,6 @@ pub fn modal<R>(
     }
     let layer = LayerId::new(Order::Foreground, place.id);
     release_focus(ctx, layer);
-    // Keep the window behind blocked until the surface is gone.
-    ctx.memory_mut(|memory| memory.set_modal_layer(layer));
     let area = Area::new(place.id)
         .order(Order::Foreground)
         .fade_in(false)

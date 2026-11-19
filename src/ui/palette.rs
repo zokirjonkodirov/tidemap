@@ -424,12 +424,12 @@ pub fn shortcuts(app: &mut TidemapApp, ctx: &Context) {
 /// Returns true when it did. The sidebar handles its own Esc while it has the keyboard.
 fn escape(app: &mut TidemapApp, ctx: &Context) -> bool {
     // The diagram menu is the topmost thing: Esc closes it before anything else.
-    if super::topbar::block_menu_open(ctx)
+    if super::topbar::block_menu_open(ctx, &app.active_file)
         && !app.palette_open
         && app.dialog.is_none()
         && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
     {
-        super::topbar::close_block_menu(ctx);
+        super::topbar::close_block_menu(ctx, &app.active_file);
         return true;
     }
     if app.sidebar_focused && !app.palette_open && app.dialog.is_none() {

@@ -261,21 +261,38 @@ const MENU_WIDTH: std::ops::RangeInclusive<f32> = 240.0..=360.0;
 /// Tallest the diagram menu gets before it scrolls.
 const MENU_MAX_HEIGHT: f32 = 320.0;
 
-/// Whether the diagram menu is open.
-pub fn block_menu_open(ctx: &Context) -> bool {
-    ctx.data(|data| data.get_temp::<bool>(Id::new(MENU_OPEN))).unwrap_or(false)
+/// Ctx-data keys of the menu's self-healing state.
+const MENU_FILE: &str = "block-menu-file";
+const MENU_DRAWN: &str = "block-menu-drawn";
+
+/// Whether a menu flagged `open` is really up: its button drew on this or the previous pass
+/// (so it was not removed by a view change) and it was opened for the file that is active now.
+fn menu_visible(open: bool, last_drawn: Option<u64>, now: u64, opened_for: &str, active: &str) -> bool {
+    open && last_drawn.is_some_and(|drawn| drawn + 1 >= now) && opened_for == active
+}
+
+/// Whether the diagram menu is open and visible for the file `active`.
+pub fn block_menu_open(ctx: &Context, active: &str) -> bool {
+    let now = ctx.cumulative_pass_nr();
+    let (open, drawn, file) = ctx.data(|data| {
+        (
+            data.get_temp::<bool>(Id::new(MENU_OPEN)).unwrap_or(false),
+            data.get_temp::<u64>(Id::new(MENU_DRAWN)),
+            data.get_temp::<String>(Id::new(MENU_FILE)).unwrap_or_default(),
+        )
+    });
+    menu_visible(open, drawn, now, &file, active)
 }
 
 fn set_block_menu_open(ctx: &Context, open: bool) {
     ctx.data_mut(|data| data.insert_temp(Id::new(MENU_OPEN), open));
 }
 
-/// Closes the diagram menu if it is open. Returns whether it was (so Esc can stop there).
-pub fn close_block_menu(ctx: &Context) -> bool {
-    let was = block_menu_open(ctx);
-    if was {
-        set_block_menu_open(ctx, false);
-    }
+/// Closes the diagram menu if it is visible. Returns whether it was (so Esc can stop there);
+/// a stale flag is cleared but reported as not open, leaving Esc to whatever is really up.
+pub fn close_block_menu(ctx: &Context, active: &str) -> bool {
+    let was = block_menu_open(ctx, active);
+    set_block_menu_open(ctx, false);
     was
 }
 
@@ -299,7 +316,18 @@ fn block_button(
     if app.palette_open || app.dialog.is_some() {
         set_block_menu_open(&ctx, false);
     }
-    let was_open = block_menu_open(&ctx);
+    let was_open = block_menu_open(&ctx, &app.active_file);
+    if !was_open {
+        // Stale (another file, or the button was away): forget it.
+        set_block_menu_open(&ctx, false);
+    }
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|data| {
+        data.insert_temp(Id::new(MENU_DRAWN), pass);
+        if !was_open {
+            data.insert_temp(Id::new(MENU_FILE), app.active_file.clone());
+        }
+    });
     let mut index = ctx
         .data(|data| data.get_temp::<usize>(Id::new(MENU_INDEX)))
         .unwrap_or(active)
@@ -337,6 +365,7 @@ fn block_button(
         if is_open {
             // Every opening starts on the active diagram, with the band already there.
             index = active;
+            ctx.data_mut(|data| data.insert_temp(Id::new(MENU_FILE), app.active_file.clone()));
             motion::restart(&ctx, Id::new(MENU_BAND));
         }
     }
@@ -512,5 +541,22 @@ fn right_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     info::paint_dot(ui.painter(), info.rect, info::status(app), p);
     if info.clicked() {
         app.info_open = !app.info_open;
+    }
+}
+
+#[cfg(test)]
+mod menu_tests {
+    use super::menu_visible;
+
+    #[test]
+    fn a_menu_is_visible_only_while_its_button_draws_for_the_same_file() {
+        assert!(menu_visible(true, Some(10), 11, "a.md", "a.md"));
+        assert!(menu_visible(true, Some(11), 11, "a.md", "a.md"));
+        // The button was not drawn last pass (single diagram, other view, closed file).
+        assert!(!menu_visible(true, Some(8), 11, "a.md", "a.md"));
+        assert!(!menu_visible(true, None, 11, "a.md", "a.md"));
+        // Another file is active now.
+        assert!(!menu_visible(true, Some(11), 11, "a.md", "b.md"));
+        assert!(!menu_visible(false, Some(11), 11, "a.md", "a.md"));
     }
 }
