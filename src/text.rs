@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use egui::{Color32, Context, Id, Painter, Pos2, Shape, epaint::{Mesh, TextShape, Vertex}, vec2};
+use egui::{Color32, Context, Id, Painter, Pos2, emath::TSTransform, epaint::TextShape};
 
 /// Largest glyph size, in points, that is ever rasterised for a zoomed label. Bigger text is
 /// the 96 point raster scaled up as geometry.
@@ -28,8 +28,6 @@ struct Settled {
     fill: f32,
     ppp: f32,
     side: usize,
-    /// Size of the atlas image in texels.
-    size: [usize; 2],
 }
 
 fn epoch_id() -> Id {
@@ -40,9 +38,6 @@ fn settled_id() -> Id {
     Id::new("tidemap-font-settled")
 }
 
-fn started_id() -> Id {
-    Id::new("tidemap-font-size-at-start")
-}
 
 /// Call once at the start of every frame, before any galley is used. Bumps the [epoch](epoch)
 /// when the atlas was rebuilt or its scale changed since the previous [`settle`].
@@ -52,7 +47,6 @@ fn started_id() -> Id {
 /// covers a rebuild for a changed `text_alpha_from_coverage`, which refills from scratch).
 pub fn observe(ctx: &Context) {
     let now = current(ctx);
-    ctx.data_mut(|data| data.insert_temp(started_id(), now.size));
     let was = ctx.data(|data| data.get_temp::<Settled>(settled_id()));
     let rebuilt = was.is_some_and(|was| now.fill < was.fill || now.ppp != was.ppp || now.side != was.side);
     if rebuilt {
@@ -61,15 +55,8 @@ pub fn observe(ctx: &Context) {
 }
 
 /// Call once at the end of every frame: records the atlas state that [`observe`] compares with.
-///
-/// An atlas that grew during the frame invalidates the texel scale [`paint_scaled`] used for the
-/// meshes it painted before the growth: one more frame is asked for to draw them again.
 pub fn settle(ctx: &Context) {
     let now = current(ctx);
-    let started = ctx.data(|data| data.get_temp::<[usize; 2]>(started_id()));
-    if started.is_some_and(|size| size != now.size) {
-        ctx.request_repaint();
-    }
     ctx.data_mut(|data| data.insert_temp(settled_id(), now));
 }
 
@@ -82,8 +69,8 @@ pub fn epoch(ctx: &Context) -> u64 {
 fn current(ctx: &Context) -> Settled {
     // Read egui's state first: its context lock is not re-entrant, so it must not be held
     // while the data lock is taken.
-    let (fill, side, size) = ctx.fonts(|fonts| (fonts.font_atlas_fill_ratio(), fonts.max_texture_side(), fonts.font_image_size()));
-    Settled { fill, ppp: ctx.pixels_per_point(), side, size }
+    let (fill, side) = ctx.fonts(|fonts| (fonts.font_atlas_fill_ratio(), fonts.max_texture_side()));
+    Settled { fill, ppp: ctx.pixels_per_point(), side }
 }
 
 /// Splits a wanted glyph size `px` into `(raster_px, scale)` with `raster_px * scale == px`.
@@ -109,37 +96,17 @@ pub fn raster(px: f32, settled: bool) -> (f32, f32) {
 
 /// Paints `galley` with its top-left corner at `top_left`, `scale` times its laid-out size.
 ///
-/// A scaled galley is drawn as one mesh built from its rows with the vertices scaled as
-/// geometry: nothing is laid out again (no new glyph size reaches the atlas) and the galley,
-/// which egui's cache shares, is neither copied nor changed.
+/// At scale 1 (what [`raster`] returns for a resting view) the galley is painted as it is: no
+/// transform, no copy. Otherwise the shape is scaled as geometry, so no new glyph size reaches the
+/// atlas; egui's `TextShape::transform` copies the (cache-shared) galley, which is accepted only
+/// while the zoom is moving. Uvs stay in texel space and egui normalises them when it tessellates
+/// at the end of the frame, so an atlas that grows mid-frame cannot misplace glyphs.
 pub fn paint_scaled(painter: &Painter, top_left: Pos2, galley: Arc<egui::Galley>, color: Color32, scale: f32) {
-    if (scale - 1.0).abs() < 1e-4 {
-        painter.add(TextShape::new(top_left, galley, color));
-        return;
+    let mut shape = TextShape::new(top_left, galley, color);
+    if (scale - 1.0).abs() >= 1e-4 {
+        shape.transform(TSTransform::new(top_left.to_vec2() * (1.0 - scale), scale));
     }
-    let atlas = painter.ctx().fonts(|fonts| fonts.font_image_size());
-    painter.add(Shape::mesh(scaled_mesh(&galley, top_left, color, scale, atlas)));
-}
-
-/// The glyphs of `galley` as one mesh of the font atlas (`atlas` texels across and down), scaled
-/// by `scale` about `top_left`, where the galley's own top-left corner is put.
-fn scaled_mesh(galley: &egui::Galley, top_left: Pos2, color: Color32, scale: f32, atlas: [usize; 2]) -> Mesh {
-    // Galleys keep texel uvs; egui's tessellator divides them by the atlas size, and so do we.
-    let normalise = vec2(1.0 / atlas[0] as f32, 1.0 / atlas[1] as f32);
-    let mut mesh = Mesh::default();
-    mesh.vertices.reserve(galley.num_vertices);
-    mesh.indices.reserve(galley.num_indices);
-    for placed in &galley.rows {
-        let visuals = &placed.row.visuals.mesh;
-        let first = mesh.vertices.len() as u32;
-        mesh.indices.extend(visuals.indices.iter().map(|index| index + first));
-        mesh.vertices.extend(visuals.vertices.iter().map(|vertex| Vertex {
-            pos: top_left + (placed.pos.to_vec2() + vertex.pos.to_vec2()) * scale,
-            uv: (vertex.uv.to_vec2() * normalise).to_pos2(),
-            color: if vertex.color == Color32::PLACEHOLDER { color } else { vertex.color },
-        }));
-    }
-    mesh
+    painter.add(shape);
 }
 
 #[cfg(test)]
@@ -183,34 +150,23 @@ mod tests {
     }
 
     #[test]
-    fn a_scaled_label_is_one_mesh_at_scaled_positions_and_leaves_the_galley_alone() {
+    fn a_resting_label_is_never_scaled_and_is_painted_as_a_plain_text_shape() {
+        let mut px = 1.0_f32;
+        while px <= MAX_RASTER_PX {
+            assert_eq!(raster(px, true).1, 1.0, "{px}");
+            px += 0.07;
+        }
         let ctx = Context::default();
-        let mut checked = false;
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            let galley = ctx.fonts_mut(|fonts| fonts.layout_no_wrap("Hi there".to_owned(), egui::FontId::proportional(20.0), Color32::RED));
-            let before: Vec<_> = galley.rows.iter().flat_map(|row| row.row.visuals.mesh.vertices.iter().map(|v| v.pos)).collect();
-            let (top_left, scale, atlas) = (egui::pos2(100.0, 50.0), 1.5, [256_usize, 128]);
-            let mesh = scaled_mesh(&galley, top_left, Color32::BLUE, scale, atlas);
-            assert!(!mesh.is_empty());
-            assert_eq!(mesh.texture_id, egui::TextureId::default(), "the font atlas");
-            let mut at = 0;
-            for row in &galley.rows {
-                for vertex in &row.row.visuals.mesh.vertices {
-                    let out = mesh.vertices[at];
-                    at += 1;
-                    let want = top_left + (row.pos.to_vec2() + vertex.pos.to_vec2()) * scale;
-                    assert!((out.pos - want).length() < 1e-3, "{:?} vs {want:?}", out.pos);
-                    assert!((out.uv.x - vertex.uv.x / 256.0).abs() < 1e-6 && (out.uv.y - vertex.uv.y / 128.0).abs() < 1e-6);
-                    assert_eq!(out.color, vertex.color);
-                }
-            }
-            assert_eq!(at, mesh.vertices.len());
-            assert!(mesh.indices.iter().all(|&i| (i as usize) < mesh.vertices.len()));
-            let after: Vec<_> = galley.rows.iter().flat_map(|row| row.row.visuals.mesh.vertices.iter().map(|v| v.pos)).collect();
-            assert_eq!(before, after, "the shared galley was not touched");
-            checked = true;
+            let painter = ctx.layer_painter(egui::LayerId::background());
+            let galley = painter.layout_no_wrap("Hi".to_owned(), egui::FontId::proportional(14.0), Color32::RED);
+            paint_scaled(&painter, egui::pos2(10.0, 20.0), galley.clone(), Color32::RED, 1.0);
+            // The shape holds the very galley (shared, not copied) at the given position.
+            let shapes = ctx.graphics_mut(|g| g.entry(egui::LayerId::background()).all_entries().map(|entry| entry.shape.clone()).collect::<Vec<_>>());
+            let Some(egui::Shape::Text(text)) = shapes.last() else { panic!("a text shape: {shapes:?}") };
+            assert!(Arc::ptr_eq(&text.galley, &galley), "no copy");
+            assert_eq!(text.pos, egui::pos2(10.0, 20.0));
         });
-        assert!(checked);
     }
 
     fn frame(ctx: &Context) {

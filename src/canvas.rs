@@ -222,6 +222,8 @@ pub struct DiagramCanvas {
     outgoing: Option<Outgoing>,
     /// The camera the scene was last painted with, which is what an outgoing scene leaves with.
     painted_camera: Camera,
+    /// The zoom the last frame drew its labels at.
+    painted_zoom: f32,
     bounds: Option<Rect>,
     size: Vec2,
     restore_pending: bool,
@@ -295,6 +297,7 @@ impl Default for DiagramCanvas {
             travel: Travel::Jump,
             outgoing: None,
             painted_camera: Camera::default(),
+            painted_zoom: 0.0,
             bounds: None,
             size: Vec2::ZERO,
             restore_pending: false,
@@ -912,13 +915,6 @@ impl DiagramCanvas {
         if progress >= 1.0 {
             self.outgoing = None;
         }
-        // At rest, labels are laid out at their exact size; a zoom that changed since the last
-        // frame (wheel, pinch) shows the cheap ladder and asks for the frame that settles it.
-        let zoom_moved = self.camera.zoom != self.painted_camera.zoom;
-        if zoom_moved {
-            ui.ctx().request_repaint();
-        }
-        emphasis.settled = !self.is_animating() && !zoom_moved;
         // The leaving diagram goes underneath, without any selection emphasis.
         if let Some(out) = &self.outgoing {
             let opacity = 1.0 - motion::fade((2.0 * progress).min(1.0));
@@ -938,6 +934,15 @@ impl DiagramCanvas {
         if self.travel == Travel::Jump && !self.growing {
             camera = scaled_about(camera, viewport.size() * 0.5, egui::lerp(JUMP_FROM_SCALE..=1.0, progress));
         }
+        // Labels are laid out at their exact size unless the zoom they are drawn at changed since
+        // the last frame (glide, wheel, pinch, scale-in): panning keeps the exact size. The frame
+        // after the last change is asked for so the exact size is drawn.
+        let zoom_moved = camera.zoom != self.painted_zoom;
+        if zoom_moved {
+            ui.ctx().request_repaint();
+        }
+        self.painted_zoom = camera.zoom;
+        emphasis.settled = !zoom_moved;
         let layer = Layer { scene, camera, opacity: motion::fade(progress) };
         let stats = paint_layer(&painter, viewport, &layer, style, dark, p.accent, &emphasis, &mut self.scratch);
         self.painted_camera = self.camera;
