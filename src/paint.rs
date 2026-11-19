@@ -620,7 +620,10 @@ impl Frame<'_> {
             return;
         }
         let zoom = self.view.zoom();
-        let ring = if selected {
+        let ring = if selected && matched {
+            // The current search hit stands out on its own, with or without dimming.
+            self.accent
+        } else if selected {
             // The ring fades in with the dimming of everything else.
             self.accent.gamma_multiply(self.dim.max(0.05))
         } else {

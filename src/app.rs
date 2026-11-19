@@ -906,8 +906,7 @@ impl TidemapApp {
             }
         }
         if let Some(text) = search {
-            self.open_search();
-            self.diagram_search = text;
+            if self.document_view() { self.docview.find_for(&text); } else { self.open_search(); self.diagram_search = text; }
         }
         self.outline_open |= outline;
         self.canvas.painted_frames = 0;

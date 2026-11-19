@@ -17,7 +17,7 @@ use egui::{
     Stroke, StrokeKind, TextFormat, Ui, pos2, text::{CCursor, CCursorRange, LayoutJob}, vec2,
 };
 use pulldown_cmark::Alignment;
-use tidemap_diagram::{Family, ItemId, StyleSheet};
+use tidemap_diagram::{Family, ItemId, NodeId, StyleSheet};
 use tidemap_model::{Camera, DiagramBlock, RenderArtifact, RenderRequest};
 use tidemap_renderer::Engine;
 
@@ -59,21 +59,77 @@ const SLOT_IDLE_FRAMES: u64 = 120;
 
 const MAX_MATCHES: usize = 20_000;
 
-/// Find on the page: the query, every match as (leaf, first char, end char), and the current one.
+/// One match of find on the page. Char offsets count `char`s of the leaf's text.
+#[derive(Clone, Debug, PartialEq)]
+enum Hit {
+    /// Text of a paragraph, heading, code block, table or HTML block.
+    Text { leaf: usize, start: usize, end: usize },
+    /// The label of a node of a drawn diagram.
+    Node { leaf: usize, node: NodeId },
+    /// The source of a diagram that is shown as text: a notice for a family that is not drawn, or
+    /// a diagram that has not been drawn yet.
+    Source { leaf: usize, start: usize, end: usize },
+}
+
+impl Hit {
+    /// Index of the leaf the match is in.
+    fn leaf(&self) -> usize {
+        match self {
+            Self::Text { leaf, .. } | Self::Node { leaf, .. } | Self::Source { leaf, .. } => *leaf,
+        }
+    }
+
+    /// The matched char range, for hits in text that the page lays out itself.
+    fn range(&self) -> Option<(usize, usize)> {
+        match self {
+            Self::Text { start, end, .. } | Self::Source { start, end, .. } => Some((*start, *end)),
+            Self::Node { .. } => None,
+        }
+    }
+}
+
+/// Find on the page: the query, every match in document order, and the current one.
 #[derive(Default)]
 struct Find {
     open: bool,
     query: String,
     focus: bool,
-    matches: Vec<(usize, usize, usize)>,
+    matches: Vec<Hit>,
     current: usize,
-    /// (document revision, lowercase query) the matches were computed for.
-    stamp: Option<(u64, String)>,
+    /// (document revision, lowercase query, diagrams drawn) the matches were computed for.
+    stamp: Option<(u64, String, u64)>,
     /// The query changed: jump to the first match at or below the top of the page.
     restart: bool,
-    /// Leaf and char to bring into view; re-aimed every frame until the page has settled there.
-    reveal: Option<(usize, usize)>,
+    /// The match to bring into view; re-aimed every frame until the page has settled there.
+    reveal: Option<Hit>,
     settled: u8,
+}
+
+/// Side of the icon buttons in the find bar, and the space between the parts of its row.
+const FIND_BUTTON: f32 = 32.0;
+const FIND_GAP: f32 = 4.0;
+
+/// Where the parts of the find bar's row sit, as x ranges from the left edge of the row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BarRow {
+    field: (f32, f32),
+    label: (f32, f32),
+    buttons: (f32, f32),
+}
+
+/// Lays out the find bar's row in `total` points: three icon buttons at the right, the status
+/// label right-aligned just left of them (`label` points wide at most, never less than 64 unless
+/// space is short), and the text field taking what is left. The parts never overlap, however long
+/// the label is.
+fn bar_layout(total: f32, label: f32) -> BarRow {
+    const MIN_LABEL: f32 = 64.0;
+    const MIN_FIELD: f32 = 40.0;
+    let buttons_w = 3.0 * FIND_BUTTON + 2.0 * FIND_GAP;
+    let buttons_x = (total - buttons_w).max(0.0);
+    let room = (buttons_x - 2.0 * FIND_GAP).max(0.0);
+    let label_w = label.max(MIN_LABEL).min((room - MIN_FIELD).max(0.0));
+    let label_x = buttons_x - FIND_GAP - label_w;
+    BarRow { field: (0.0, (label_x - FIND_GAP).max(0.0)), label: (label_x.max(0.0), label_x.max(0.0) + label_w), buttons: (buttons_x, buttons_x + buttons_w) }
 }
 
 /// What the page asks the app to do.
@@ -158,6 +214,8 @@ pub struct DocView {
     /// The font-atlas epoch and display scale `slots` were laid out under.
     laid_out: (u64, f32),
     artifacts: HashMap<u64, Arc<RenderArtifact>>,
+    /// Counts every change of `artifacts`, so find knows when a diagram it searched has changed.
+    drawn: u64,
     /// The newest picture of each diagram id, shown until its replacement is ready.
     stale: HashMap<String, Arc<RenderArtifact>>,
     requested: HashMap<u64, (f64, f64)>,
@@ -208,6 +266,7 @@ impl Default for DocView {
             slots: HashMap::new(),
             laid_out: (0, 0.0),
             artifacts: HashMap::new(),
+            drawn: 0,
             stale: HashMap::new(),
             requested: HashMap::new(),
             frame: 0,
@@ -449,11 +508,21 @@ impl DocView {
         self.find.stamp = None;
     }
 
-    fn refresh_matches(&mut self, doc: &Doc) {
-        let stamp = (self.key.as_ref().map_or(0, |key| key.1), self.find.query.to_lowercase());
+    /// Opens find with `query` already typed (the screenshot hook uses this).
+    pub fn find_for(&mut self, query: &str) {
+        self.open_find();
+        self.find.query = query.to_owned();
+        self.find.restart = true;
+    }
+
+    /// Recomputes the matches when the document, the query or a diagram has changed. A new
+    /// document or query also aims the reveal at the first match from the top of the view.
+    fn refresh_matches(&mut self, doc: &Doc, input: &Input) {
+        let stamp = (self.key.as_ref().map_or(0, |key| key.1), self.find.query.to_lowercase(), self.drawn);
         if self.find.stamp.as_ref() == Some(&stamp) {
             return;
         }
+        let searched_anew = self.find.stamp.as_ref().is_none_or(|old| old.0 != stamp.0 || old.1 != stamp.1);
         self.find.matches.clear();
         let needle = stamp.1.clone();
         self.find.stamp = Some(stamp);
@@ -461,33 +530,37 @@ impl DocView {
             self.find.current = 0;
             return;
         }
-        'leaves: for (index, leaf) in doc.leaves.iter().enumerate() {
-            let text = match &leaf.kind {
-                Kind::Text { .. } | Kind::Code { .. } | Kind::Html(_) | Kind::Table(_) => leaf.plain.as_str(),
-                _ => continue,
-            };
-            if text.len() < needle.len() {
-                continue;
-            }
-            let (mut rest, mut chars) = (text, 0usize);
-            while let Some((from, to)) = crate::editor::find_fold(rest, &needle) {
-                let start = chars + rest[..from].chars().count();
-                let end = start + rest[from..to].chars().count();
-                self.find.matches.push((index, start, end));
-                chars = end;
-                rest = &rest[to..];
-                if self.find.matches.len() >= MAX_MATCHES {
-                    break 'leaves;
+        let mut found = Vec::new();
+        for (index, leaf) in doc.leaves.iter().enumerate() {
+            match &leaf.kind {
+                Kind::Text { .. } | Kind::Code { .. } | Kind::Html(_) | Kind::Table(_) => {
+                    found.extend(text_ranges(&leaf.plain, &needle).map(|(start, end)| Hit::Text { leaf: index, start, end }));
                 }
+                Kind::Diagram { source, .. } => match self.artifact(leaf, input) {
+                    Some(artifact) if is_drawn(&artifact) => {
+                        found.extend(artifact.rendered.scene.find(&needle).into_iter().map(|node| Hit::Node { leaf: index, node }));
+                    }
+                    _ => found.extend(text_ranges(source, &needle).map(|(start, end)| Hit::Source { leaf: index, start, end })),
+                },
+                _ => {}
+            }
+            if found.len() >= MAX_MATCHES {
+                found.truncate(MAX_MATCHES);
+                break;
             }
         }
-        if self.find.restart || self.find.current >= self.find.matches.len() {
+        self.find.matches = found;
+        let moved = self.find.restart || self.find.current >= self.find.matches.len();
+        if moved {
             let top = self.tops.partition_point(|top| *top <= self.scroll_y).saturating_sub(1);
-            self.find.current = self.find.matches.iter().position(|m| m.0 >= top).unwrap_or(0);
+            self.find.current = self.find.matches.iter().position(|hit| hit.leaf() >= top).unwrap_or(0);
             self.find.restart = false;
         }
-        self.find.reveal = self.find.matches.get(self.find.current).map(|m| (m.0, m.1));
-        self.find.settled = 0;
+        // A diagram arriving while the reader reads on must not pull the page back.
+        if searched_anew || moved {
+            self.find.reveal = self.find.matches.get(self.find.current).cloned();
+            self.find.settled = 0;
+        }
     }
 
     fn step_match(&mut self, forward: bool) {
@@ -496,8 +569,7 @@ impl DocView {
             return;
         }
         self.find.current = if forward { (self.find.current + 1) % count } else { (self.find.current + count - 1) % count };
-        let (leaf, from, _) = self.find.matches[self.find.current];
-        self.find.reveal = Some((leaf, from));
+        self.find.reveal = Some(self.find.matches[self.find.current].clone());
         self.find.settled = 0;
     }
 
@@ -513,18 +585,57 @@ impl DocView {
         }
     }
 
-    /// The matches inside leaf `index` as (first char, end char, is the current one).
-    fn leaf_matches(&self, index: usize) -> Vec<(usize, usize, bool)> {
-        if !self.find.open || self.find.matches.is_empty() {
-            return Vec::new();
+    /// Distance from the top of a leaf's area to the line (or the middle of the node) of `hit`.
+    fn hit_y(&mut self, ctx: &Context, doc: &Doc, hit: &Hit, width: f32, p: Palette, input: &Input) -> f32 {
+        let leaf = &doc.leaves[hit.leaf()];
+        let inner = Self::inner_width(leaf, width);
+        match hit {
+            Hit::Text { leaf, start, .. } => self.char_y(ctx, doc, *leaf, *start, width, p),
+            Hit::Node { node, .. } => self.artifact(leaf, input).and_then(|artifact| node_center_y(&artifact, *node, inner)).unwrap_or(0.0),
+            Hit::Source { start, .. } => match &leaf.kind {
+                Kind::Diagram { source, .. } => {
+                    let galley = notice_galley(ctx, source, inner, Color32::WHITE);
+                    DIAGRAM_PAD + NOTICE_HEAD + galley.pos_from_cursor(CCursor { index: *start, prefer_next_row: true }).min.y
+                }
+                _ => 0.0,
+            },
+        }
+    }
+
+    /// The matches inside leaf `index`: where they start in `find.matches`, and which they are.
+    fn leaf_hits(&self, index: usize) -> (usize, &[Hit]) {
+        if !self.find.open {
+            return (0, &[]);
         }
         let all = &self.find.matches;
-        let from = all.partition_point(|m| m.0 < index);
-        let mut out = Vec::new();
-        for (offset, m) in all[from..].iter().take_while(|m| m.0 == index).enumerate() {
-            out.push((m.1, m.2, from + offset == self.find.current));
+        let from = all.partition_point(|hit| hit.leaf() < index);
+        let len = all[from..].iter().take_while(|hit| hit.leaf() == index).count();
+        (from, &all[from..from + len])
+    }
+
+    /// The text matches inside leaf `index` as (first char, end char, is the current one).
+    fn leaf_matches(&self, index: usize) -> Vec<(usize, usize, bool)> {
+        let (from, hits) = self.leaf_hits(index);
+        hits.iter()
+            .enumerate()
+            .filter_map(|(offset, hit)| hit.range().map(|(start, end)| (start, end, from + offset == self.find.current)))
+            .collect()
+    }
+
+    /// The nodes of the diagram in leaf `index` that match, and the current match if it is one.
+    fn leaf_nodes(&self, index: usize) -> (Vec<NodeId>, Option<NodeId>) {
+        let (from, hits) = self.leaf_hits(index);
+        let mut nodes = Vec::new();
+        let mut current = None;
+        for (offset, hit) in hits.iter().enumerate() {
+            if let Hit::Node { node, .. } = hit {
+                nodes.push(*node);
+                if from + offset == self.find.current {
+                    current = Some(*node);
+                }
+            }
         }
-        out
+        (nodes, current)
     }
 
     fn find_bar(&mut self, ctx: &Context, rect: Rect, p: Palette) {
@@ -548,44 +659,54 @@ impl DocView {
             ui.multiply_opacity(shown);
             theme::elevated(ui, p, theme::Level::Raised, 12.0, Margin::symmetric(10, 4), |ui| {
                 ui.set_width(width - 20.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    let field = ui.add(
-                        egui::TextEdit::singleline(&mut self.find.query)
-                            .id(field_id)
-                            .frame(false)
-                            .desired_width((width - 176.0).max(60.0))
-                            .hint_text("Find on the page\u{2026}"),
-                    );
-                    if std::mem::take(&mut self.find.focus) {
+                let color = if count == 0 && !self.find.query.is_empty() { p.danger } else { p.muted };
+                let label_font = FontId::proportional(12.0);
+                let measured = ui.painter().layout_no_wrap(label.clone(), label_font.clone(), color).size().x;
+                let row = bar_layout(ui.available_width(), measured);
+                let (area, _) = ui.allocate_exact_size(vec2(ui.available_width(), FIND_BUTTON), Sense::hover());
+                let slot = |(from, to): (f32, f32), layout: egui::Layout| {
+                    egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(area.left() + from, area.top()), pos2(area.left() + to, area.bottom()))).layout(layout)
+                };
+                let field = ui
+                    .scope_builder(slot(row.field, egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.find.query)
+                                .id(field_id)
+                                .frame(false)
+                                .desired_width(row.field.1 - row.field.0)
+                                .hint_text("Find on the page\u{2026}"),
+                        )
+                    })
+                    .inner;
+                if std::mem::take(&mut self.find.focus) {
+                    field.request_focus();
+                    if let Some(mut state) = egui::TextEdit::load_state(ctx, field_id) {
+                        let end = self.find.query.chars().count();
+                        state.cursor.set_char_range(Some(CCursorRange::two(CCursor::new(0), CCursor::new(end))));
+                        state.store(ctx, field_id);
+                    }
+                }
+                changed = field.changed();
+                if field.lost_focus() {
+                    let (enter, shift, escape) = ctx.input(|i| (i.key_pressed(Key::Enter), i.modifiers.shift, i.key_pressed(Key::Escape)));
+                    if enter {
+                        step = Some(!shift);
                         field.request_focus();
-                        if let Some(mut state) = egui::TextEdit::load_state(ctx, field_id) {
-                            let end = self.find.query.chars().count();
-                            state.cursor.set_char_range(Some(CCursorRange::two(CCursor::new(0), CCursor::new(end))));
-                            state.store(ctx, field_id);
-                        }
                     }
-                    changed = field.changed();
-                    if field.lost_focus() {
-                        let (enter, shift, escape) =
-                            ctx.input(|i| (i.key_pressed(Key::Enter), i.modifiers.shift, i.key_pressed(Key::Escape)));
-                        if enter {
-                            step = Some(!shift);
-                            field.request_focus();
-                        }
-                        close |= escape;
+                    close |= escape;
+                }
+                ui.scope_builder(slot(row.label, egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+                    ui.add(egui::Label::new(RichText::new(label.as_str()).font(label_font).color(color)).truncate());
+                });
+                ui.scope_builder(slot(row.buttons, egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+                    ui.spacing_mut().item_spacing.x = FIND_GAP;
+                    if icons::button(ui, Icon::Back, "Previous match \u{b7} Shift+Enter", false, count > 0).clicked() {
+                        step = Some(false);
                     }
-                    let color = if count == 0 && !self.find.query.is_empty() { p.danger } else { p.muted };
-                    ui.label(RichText::new(label.as_str()).size(12.0).color(color));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        close |= icons::button(ui, Icon::Close, "Close · Esc", false, true).clicked();
-                        if icons::button(ui, Icon::Forward, "Next match · Enter", false, count > 0).clicked() {
-                            step = Some(true);
-                        }
-                        if icons::button(ui, Icon::Back, "Previous match · Shift+Enter", false, count > 0).clicked() {
-                            step = Some(false);
-                        }
-                    });
+                    if icons::button(ui, Icon::Forward, "Next match \u{b7} Enter", false, count > 0).clicked() {
+                        step = Some(true);
+                    }
+                    close |= icons::button(ui, Icon::Close, "Close \u{b7} Esc", false, true).clicked();
                 });
             });
         });
@@ -878,6 +999,7 @@ impl DocView {
             if let Some(artifact) = engine.cached(&id, source) {
                 self.stale.insert(id, artifact.clone());
                 self.artifacts.insert(leaf.hash, artifact);
+                self.drawn += 1;
                 continue;
             }
             if now - asked < 1.5 {
@@ -924,6 +1046,7 @@ impl DocView {
             self.key = None;
             self.settle = WidthSettle::default();
             self.artifacts.clear();
+            self.drawn += 1;
             self.stale.clear();
             self.requested.clear();
             self.scroll_y = input.saved_scroll.max(0.0);
@@ -951,12 +1074,13 @@ impl DocView {
         let doc = self.doc.clone();
         let count = doc.leaves.len();
         self.images.poll(&ctx);
-        self.refresh_matches(&doc);
-        if let Some((leaf, ch)) = self.find.reveal
-            && leaf < count
+        self.refresh_matches(&doc, input);
+        if let Some(hit) = self.find.reveal.clone()
+            && hit.leaf() < count
         {
+            let leaf = hit.leaf();
             let max_scroll = (self.total() - view_h).max(0.0);
-            let dy = self.char_y(&ctx, &doc, leaf, ch, width, p);
+            let dy = self.hit_y(&ctx, &doc, &hit, width, p, input);
             let want = (self.tops[leaf] + doc.leaves[leaf].gap + dy - view_h * 0.38).clamp(0.0, max_scroll);
             self.target_y = want;
             if (self.scroll_y - want).abs() < 1.0 {
@@ -968,10 +1092,10 @@ impl DocView {
                 self.find.settled = 0;
             }
             // A match far along a long code line: slide the block sideways to it.
-            if let Kind::Code { .. } = &doc.leaves[leaf].kind {
+            if let (Kind::Code { .. }, Hit::Text { start: ch, .. }) = (&doc.leaves[leaf].kind, &hit) {
                 let inner = Self::inner_width(&doc.leaves[leaf], width) - 2.0 * CODE_PAD;
                 if let Slot::Code(galley) = &*self.slot(&ctx, &doc, leaf, width, p) {
-                    let x = galley.pos_from_cursor(CCursor { index: ch, prefer_next_row: true }).min.x;
+                    let x = galley.pos_from_cursor(CCursor { index: *ch, prefer_next_row: true }).min.x;
                     let at = self.hscroll.entry(doc.leaves[leaf].hash).or_insert(0.0);
                     if x < *at || x > *at + inner - 60.0 {
                         *at = (x - 60.0).max(0.0);
@@ -1380,7 +1504,7 @@ impl DocView {
                 }
             }
             (Kind::Diagram { block, source }, _) => {
-                self.paint_diagram(ctx, painter, leaf, area, input, *block, source, now);
+                self.paint_diagram(ctx, painter, index, leaf, area, input, *block, source, now);
             }
             _ => {}
         }
@@ -1457,6 +1581,7 @@ impl DocView {
         &mut self,
         ctx: &Context,
         painter: &egui::Painter,
+        index: usize,
         leaf: &Leaf,
         area: Rect,
         input: &Input,
@@ -1495,6 +1620,8 @@ impl DocView {
                 let view = Rect::from_min_size(inner.min, vec2(inner.width(), (height - 2.0 * DIAGRAM_PAD).max(1.0)));
                 let clip = painter.clip_rect().intersect(view);
                 let sub = painter.with_clip_rect(clip);
+                // Find on the page rings the matching nodes; nothing else on the page is dimmed.
+                let (matches, selected) = self.leaf_nodes(index);
                 paint::paint_scene(
                     &sub,
                     view,
@@ -1503,7 +1630,7 @@ impl DocView {
                     input.style,
                     input.dark,
                     p.accent,
-                    &paint::Emphasis { selected: None, strong_nodes: &[], strong_edges: &[], matches: &[], dim: 0.0 },
+                    &paint::Emphasis { selected, strong_nodes: &[], strong_edges: &[], matches: &matches, dim: 0.0 },
                     &mut self.scratch,
                 );
                 if clipped {
@@ -1520,9 +1647,12 @@ impl DocView {
             Fit::Notice => {
                 let title = unsupported_title(artifact.rendered.family);
                 painter.text(pos2(inner.left(), inner.top()), Align2::LEFT_TOP, title, FontId::new(13.0, theme::font_medium()), p.secondary);
-                let job = plain_job(source.trim_end(), FontId::monospace(CODE_SIZE - 0.5), p.muted, CODE_LINE - 2.0, inner.width());
-                let galley = ctx.fonts_mut(|fonts| fonts.layout_job(job));
-                painter.galley(pos2(inner.left(), inner.top() + 26.0), galley, p.muted);
+                let galley = notice_galley(ctx, source, boxr.width(), p.muted);
+                let at = pos2(inner.left(), inner.top() + NOTICE_HEAD);
+                for (from, to, current) in self.leaf_matches(index) {
+                    paint_selection(painter, &galley, at, Some((from, to)), find_color(current, input.dark));
+                }
+                painter.galley(at, galley, p.muted);
             }
         }
         if lift > 0.0 {
@@ -1973,17 +2103,51 @@ fn unsupported_title(family: Family) -> &'static str {
     }
 }
 
+/// Height of the title above the source in a diagram notice.
+const NOTICE_HEAD: f32 = 26.0;
+
+/// The source of a diagram shown as a notice, laid out for an embed `inner` points wide.
+fn notice_galley(ctx: &Context, source: &str, inner: f32, color: Color32) -> Arc<Galley> {
+    let job = plain_job(source.trim_end(), FontId::monospace(CODE_SIZE - 0.5), color, CODE_LINE - 2.0, inner - 2.0 * DIAGRAM_PAD);
+    ctx.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
 fn notice_height(ctx: &Context, leaf: &Leaf, inner: f32, _p: Palette) -> f32 {
     let Kind::Diagram { source, .. } = &leaf.kind else { return DIAGRAM_PLACEHOLDER };
-    let job = plain_job(source.trim_end(), FontId::monospace(CODE_SIZE - 0.5), Color32::WHITE, CODE_LINE - 2.0, inner - 2.0 * DIAGRAM_PAD);
-    let galley = ctx.fonts_mut(|fonts| fonts.layout_job(job));
-    galley.size().y + 26.0 + 2.0 * DIAGRAM_PAD
+    notice_galley(ctx, source, inner, Color32::WHITE).size().y + NOTICE_HEAD + 2.0 * DIAGRAM_PAD
+}
+
+/// Whether the page draws this diagram (a flowchart with nodes) rather than showing its source.
+fn is_drawn(artifact: &RenderArtifact) -> bool {
+    artifact.rendered.family == Family::Flowchart && !artifact.rendered.scene.nodes.is_empty()
+}
+
+/// Distance from the top of a diagram's embed to the middle of `node`, as drawn in a column of
+/// `inner_box` points. `None` when the diagram is not drawn or has no such node.
+fn node_center_y(artifact: &RenderArtifact, node: NodeId, inner_box: f32) -> Option<f32> {
+    let Fit::Scene { zoom, .. } = diagram_fit(artifact, inner_box) else { return None };
+    let scene = &artifact.rendered.scene;
+    let rect = scene.nodes.iter().find(|item| item.id == node)?.rect;
+    Some(DIAGRAM_PAD + (rect.y + rect.h * 0.5 - scene.bounds.y) * zoom)
+}
+
+/// The char ranges where `needle` (already lowercase) occurs in `text`, ignoring case.
+fn text_ranges<'a>(text: &'a str, needle: &'a str) -> impl Iterator<Item = (usize, usize)> + 'a {
+    let (mut rest, mut chars) = (if text.len() < needle.len() { "" } else { text }, 0usize);
+    std::iter::from_fn(move || {
+        let (from, to) = crate::editor::find_fold(rest, needle)?;
+        let start = chars + rest[..from].chars().count();
+        let end = start + rest[from..to].chars().count();
+        chars = end;
+        rest = &rest[to..];
+        Some((start, end))
+    })
 }
 
 /// How a laid-out diagram fits a column of `inner_box` points: scale and box height.
 fn diagram_fit(artifact: &RenderArtifact, inner_box: f32) -> Fit {
     let scene = &artifact.rendered.scene;
-    if artifact.rendered.family != Family::Flowchart || scene.nodes.is_empty() {
+    if !is_drawn(artifact) {
         return Fit::Notice;
     }
     let b = scene.bounds;
@@ -2383,7 +2547,7 @@ mod tests {
             frame(&mut view, &mut engine, &mut next_job);
         }
         assert_eq!(view.find.matches.len(), 1, "one heading says Section 300");
-        let (leaf, _, _) = view.find.matches[0];
+        let leaf = view.find.matches[0].leaf();
         let top = view.tops[leaf];
         assert!(view.scroll_y > 1000.0, "the page scrolled to the match");
         assert!(top >= view.scroll_y && top <= view.scroll_y + 800.0, "the match is on screen: top {top}, scroll {}", view.scroll_y);
@@ -2442,5 +2606,103 @@ mod tests {
         let found = scales(&view);
         assert!(!found.is_empty());
         assert!(found.iter().all(|&ppp| ppp == 2.0), "a galley laid out for the old atlas survived: {found:?}");
+    }
+
+    /// Runs frames until every diagram of the page has an artifact (or gives up).
+    fn draw_diagrams(rig: &mut Harness) {
+        let wanted = rig.view.doc.leaves.iter().filter(|leaf| matches!(leaf.kind, Kind::Diagram { .. })).count();
+        for _ in 0..800 {
+            rig.frame(1000.0);
+            if rig.view.artifacts.len() >= wanted {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(rig.view.artifacts.len(), wanted, "the diagrams were drawn");
+    }
+
+    /// Opens find on the page with `query` and runs `frames` frames.
+    fn find_on_page(rig: &mut Harness, query: &str, frames: usize) {
+        rig.view.open_find();
+        rig.view.find.query = query.to_owned();
+        rig.view.find.restart = true;
+        for _ in 0..frames {
+            rig.frame(1000.0);
+        }
+    }
+
+    fn diagram_leaf(view: &DocView) -> usize {
+        view.doc.leaves.iter().position(|leaf| matches!(leaf.kind, Kind::Diagram { .. })).expect("a diagram")
+    }
+
+    #[test]
+    fn page_find_matches_diagram_labels() {
+        let filler = "A paragraph of filler text that makes the page taller than the window.\n\n".repeat(24);
+        let mut rig = Harness::new(format!("# Notes\n\n{filler}```mermaid\nflowchart TD\n  A[An idea] --> B[Plan]\n```\n"));
+        rig.frame(1000.0);
+        draw_diagrams(&mut rig);
+        find_on_page(&mut rig, "idea", 90);
+        let leaf = diagram_leaf(&rig.view);
+        let Some(&Hit::Node { leaf: at, node }) = rig.view.find.matches.first() else {
+            panic!("a node hit in the diagram: {:?}", rig.view.find.matches)
+        };
+        assert_eq!((at, rig.view.find.matches.len()), (leaf, 1));
+        // The page scrolled so that the node's centre sits on the reveal line.
+        let artifact = rig.view.artifacts.values().next().unwrap().clone();
+        let scene = &artifact.rendered.scene;
+        let inner = DocView::inner_width(&rig.view.doc.leaves[leaf], rig.view.width);
+        let Fit::Scene { zoom, .. } = diagram_fit(&artifact, inner) else { panic!("a flowchart is drawn") };
+        let item = scene.nodes.iter().find(|n| n.id == node).unwrap();
+        let y = rig.view.tops[leaf] + rig.view.doc.leaves[leaf].gap + DIAGRAM_PAD + (item.rect.y + item.rect.h * 0.5 - scene.bounds.y) * zoom - rig.view.scroll_y;
+        assert!(rig.view.scroll_y > 100.0, "the page scrolled down to the diagram");
+        let at_bottom = rig.view.scroll_y >= rig.view.total() - 800.0 - 1.0;
+        assert!((y - 800.0 * 0.38).abs() < 6.0 || at_bottom, "node centre at the reveal line, got {y}");
+        // Stepping aims at the diagram again.
+        rig.view.step_match(true);
+        assert_eq!(rig.view.find.reveal.as_ref().map(Hit::leaf), Some(leaf));
+    }
+
+    #[test]
+    fn page_find_matches_unsupported_diagram_source() {
+        let mut rig = Harness::new("# Notes\n\n```mermaid\nsequenceDiagram\n  participant Reader\n  Reader->>Writer: hello\n```\n".to_owned());
+        rig.frame(1000.0);
+        draw_diagrams(&mut rig);
+        find_on_page(&mut rig, "reader", 30);
+        let leaf = diagram_leaf(&rig.view);
+        assert_eq!(rig.view.find.matches.len(), 2, "two mentions of Reader: {:?}", rig.view.find.matches);
+        assert!(rig.view.find.matches.iter().all(|hit| matches!(hit, Hit::Source { leaf: l, .. } if *l == leaf)));
+    }
+
+    #[test]
+    fn page_find_follows_a_diagram_that_arrives_late() {
+        let mut rig = Harness::new("```mermaid\nflowchart TD\n  A[An idea]\n```\n".to_owned());
+        rig.frame(1000.0);
+        find_on_page(&mut rig, "idea", 1);
+        assert!(!rig.view.find.matches.is_empty());
+        assert!(rig.view.find.matches.iter().all(|hit| matches!(hit, Hit::Source { .. })), "source hits before the drawing: {:?}", rig.view.find.matches);
+        draw_diagrams(&mut rig);
+        for _ in 0..10 {
+            rig.frame(1000.0);
+        }
+        assert!(!rig.view.find.matches.is_empty());
+        assert!(rig.view.find.matches.iter().all(|hit| matches!(hit, Hit::Node { .. })), "node hits once drawn: {:?}", rig.view.find.matches);
+    }
+
+    #[test]
+    fn the_find_row_never_overlaps() {
+        for total in (200..=400).step_by(10) {
+            let total = total as f32;
+            for label in (0..=300).step_by(7) {
+                let row = bar_layout(total, label as f32);
+                let ctx = format!("{row:?} at {total}/{label}");
+                assert!(row.field.0 >= 0.0 && row.field.1 >= row.field.0, "field {ctx}");
+                assert!(row.label.1 >= row.label.0 && row.field.1 <= row.label.0, "label clear of the field {ctx}");
+                assert!(row.label.1 <= row.buttons.0 && row.buttons.1 <= total + 0.001, "buttons clear of the label {ctx}");
+                assert!((row.buttons.1 - row.buttons.0 - 104.0).abs() < 0.001, "three 32 px buttons {ctx}");
+                if total >= 300.0 && (64..=100).contains(&label) {
+                    assert!(row.label.1 - row.label.0 >= label as f32 - 0.001, "a label that fits keeps its width {ctx}");
+                }
+            }
+        }
     }
 }

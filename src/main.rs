@@ -86,7 +86,7 @@ fn main() -> eframe::Result {
 /// first node whose label contains the text, `TIDEMAP_SHOT_SOURCE=1|full` opens the source panel
 /// (`full` for the whole file), `TIDEMAP_SHOT_FOLDER=<dir>` opens that folder as the workspace first,
 /// `TIDEMAP_SHOT_DIALOG=export|settings|help|close|diagnostics` opens a dialog, `TIDEMAP_SHOT_INFO=1` the info popover,
-/// `TIDEMAP_SHOT_PALETTE=<query>` the palette (`>` for commands), `TIDEMAP_SHOT_SEARCH=<text>` the diagram search,
+/// `TIDEMAP_SHOT_PALETTE=<query>` the palette (`>` for commands), `TIDEMAP_SHOT_SEARCH=<text>` the diagram search (find on the page for a Markdown file),
 /// `TIDEMAP_SHOT_OUTLINE=1` the outline, and `TIDEMAP_SHOT_EMPTY=1` without a file the no-workspace welcome state.
 fn start_options() -> app::StartOptions {
     let open = std::env::args_os()
