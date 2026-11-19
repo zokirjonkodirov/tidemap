@@ -96,13 +96,18 @@ fn push_transform(t: f32, centre: Pos2) -> TSTransform {
 
 /// Sinks the window behind a modal: the background and the pill scale about the screen centre
 /// to [`PUSH_SCALE`] as `t` goes from 0 to 1. Call once per frame with the strongest modal
-/// presence; at `t == 0` (or under reduced motion) the transforms are removed.
+/// presence; once `t` has been 0 for a moment (or under reduced motion) the transforms are
+/// removed. A sudden drop of `t` eases out rather than snapping.
 ///
 /// The toast layer is deliberately left alone: it has its own entrance transform, so it reads
 /// this one back with [`pushed`] and composes `pushed * enter` itself. That way neither
 /// overwrites the other.
 pub fn push_back(ctx: &Context, t: f32) {
-    let push = push_transform(if motion::reduced(ctx) { 0.0 } else { t }, ctx.content_rect().center());
+    // Sinking follows `t` at once; only a drop (a modal that vanishes in a frame) eases out, so
+    // the window never snaps back. The spring is exactly 0 at rest, keeping the identity.
+    let t = t.clamp(0.0, 1.0);
+    let eased = motion::spring(ctx, Id::new(PUSH_KEY).with("ease"), t, motion::SNAP).clamp(0.0, 1.0).max(t);
+    let push = push_transform(if motion::reduced(ctx) { 0.0 } else { eased }, ctx.content_rect().center());
     ctx.data_mut(|data| data.insert_temp(Id::new(PUSH_KEY), push));
     ctx.set_transform_layer(LayerId::background(), push);
     ctx.set_transform_layer(pill_layer(), push);
@@ -248,10 +253,31 @@ mod tests {
         let centre = ctx.content_rect().center();
         assert!(((sunk * centre) - centre).length() < 1e-3, "centre must stay put");
         assert!(ctx.layer_transform_to_global(pill).is_some());
+        // A drop eases out (see the next test); a fresh context at 0 is the identity.
+        let ctx = egui::Context::default();
         let _ = ctx.run(Default::default(), |c| push_back(c, 0.0));
         assert!(ctx.layer_transform_to_global(LayerId::background()).is_none());
         assert!(ctx.layer_transform_to_global(pill).is_none());
         assert_eq!(pushed(&ctx), TSTransform::IDENTITY);
+    }
+
+    #[test]
+    fn push_back_eases_out_when_the_modal_vanishes_at_once() {
+        let ctx = egui::Context::default();
+        let frame = |ctx: &egui::Context, time: f64, t: f32| {
+            let input = egui::RawInput { time: Some(time), ..Default::default() };
+            let _ = ctx.run(input, |c| push_back(c, t));
+            ctx.layer_transform_to_global(LayerId::background()).map_or(1.0, |transform| transform.scaling)
+        };
+        assert!((frame(&ctx, 0.0, 1.0) - PUSH_SCALE).abs() < 1e-6, "sinking follows the modal at once");
+        let first = frame(&ctx, 0.016, 0.0);
+        assert!(first < 1.0 && first > PUSH_SCALE, "the window must not snap back: {first}");
+        let mut last = first;
+        for step in 2..200 {
+            last = frame(&ctx, 0.016 * f64::from(step), 0.0);
+        }
+        assert_eq!(last, 1.0);
+        assert!(ctx.layer_transform_to_global(LayerId::background()).is_none(), "identity exactly at rest");
     }
 
     #[test]

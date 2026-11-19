@@ -423,7 +423,7 @@ const SHORTCUT_GROUPS: [(&str, &[(&str, &str)]); 7] = [
         ("Show or hide sidebar", "Ctrl+B"),
         ("Show or hide the outline", "Ctrl+Shift+L"),
         ("Switch light or dark", "Ctrl+Shift+D"),
-        ("Toggle reduced motion (run a command)", "Ctrl+Shift+P"),
+        ("Toggle reduced motion in the command palette", "Ctrl+Shift+P"),
         ("Settings", "Ctrl+,"),
         ("This list", "Ctrl+/ or ? or F1"),
     ]),

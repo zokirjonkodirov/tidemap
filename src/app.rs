@@ -30,7 +30,7 @@ pub struct ShotOptions { pub path:PathBuf, pub folder:Option<PathBuf>, pub dark:
 /// `select`: label text of the node to select; `source`: open the source panel (`full` for the whole file);
 /// `dialog`: `export`, `settings`, `help`, `close` or `diagnostics`; `folder`: open this folder as the workspace first;
 /// `info`, `palette` (query), `search` (text) and `outline` open those surfaces; `empty`: no file and no workspace.
-pub(crate) struct ShotState { path:PathBuf, started:Instant, requested:bool, frames:u32, select:Option<String>, source:Option<String>, dialog:Option<String>, info:bool, palette:Option<String>, search:Option<String>, outline:bool }
+pub(crate) struct ShotState { path:PathBuf, started:Instant, requested:bool, frames:u32, hooked:bool, select:Option<String>, source:Option<String>, dialog:Option<String>, info:bool, palette:Option<String>, search:Option<String>, outline:bool }
 /// Seconds after which a screenshot is taken even if the diagram never settled.
 const SHOT_TIMEOUT:Duration=Duration::from_secs(20);
 /// How long a toast stays on screen.
@@ -107,7 +107,7 @@ impl TidemapApp {
         let dark=theme::apply(&cc.egui_ctx,settings.theme);
         let shot_folder=options.shot.as_ref().and_then(|shot|shot.folder.clone());
         let shot_empty=options.shot.as_ref().is_some_and(|shot|shot.empty);
-        let shot=options.shot.map(|shot|ShotState{path:shot.path,started:Instant::now(),requested:false,frames:0,select:shot.select,source:shot.source,dialog:shot.dialog,info:shot.info,palette:shot.palette,search:shot.search,outline:shot.outline});
+        let shot=options.shot.map(|shot|ShotState{path:shot.path,started:Instant::now(),requested:false,frames:0,hooked:false,select:shot.select,source:shot.source,dialog:shot.dialog,info:shot.info,palette:shot.palette,search:shot.search,outline:shot.outline});
         let mut app=Self {core,renderer,style,shot,settings,dark,workspace,recents,recoveries,buffers:BTreeMap::new(),active_file:String::new(),active_block:String::new(),editor_open:state.editor_open,full_file:state.full_file,state,
             canvas:DiagramCanvas::default(),nav_travel:None,editor:SourceEditor::default(),docview:Default::default(),source_text:String::new(),editor_key:String::new(),sidebar_open:true,tree_query:String::new(),collapsed:BTreeSet::new(),palette_open:false,palette_query:String::new(),palette_index:0,palette_fresh:false,search_fresh:false,info_anchor:egui::Rect::NOTHING,canvas_area:egui::Rect::NOTHING,theme_anchor:egui::Rect::NOTHING,page_opens:Default::default(),ctx:cc.egui_ctx.clone(),
             diagram_search:String::new(),search_open:false,outline_open:false,info_open:false,dialog:None,recovery_file:None,conflict_file:None,toast:error.map(|text|(text,Instant::now())),search_hits:Vec::new(),search_key:(String::new(),String::new()),search_cursor:None,previews:HashMap::new(),diagnostics:HashMap::new(),pending_render:None,active_job:None,next_job:1,reads:HashMap::new(),generation:0,pending_restore,last_journal:None,last_persist:None,allow_close:false,font_ready:false,diagnostics_text:String::new(),workspace_revision:1,tree_cache:None,
@@ -870,6 +870,7 @@ impl TidemapApp {
         let search = shot.search.take();
         let outline = std::mem::take(&mut shot.outline);
         shot.frames = 0;
+        shot.hooked = true;
 
         if let (Some(text), Some(artifact)) = (select, &artifact) {
             let needle = text.to_lowercase();
@@ -910,6 +911,7 @@ impl TidemapApp {
         }
         self.outline_open |= outline;
         self.canvas.painted_frames = 0;
+        self.card_frames = 0;
     }
 
     /// Dev hook: pretends the open file changed on disk, so the conflict dialog can be shot.
@@ -928,6 +930,7 @@ impl TidemapApp {
         let hooks_pending = self.shot_hooks_pending();
         let Some(shot) = self.shot.as_mut() else { return };
         shot.frames += 1;
+        let hooked = std::mem::take(&mut shot.hooked);
         let (path, requested, started, frames) = (shot.path.clone(), shot.requested, shot.started, shot.frames);
         ctx.request_repaint_after(Duration::from_millis(30));
         let image = ctx.input(|input| {
@@ -966,7 +969,7 @@ impl TidemapApp {
             && self.pending_render.is_none()
             && self.active_job.is_none()
             && !self.renderer.is_busy();
-        if settled || started.elapsed() > SHOT_TIMEOUT {
+        if capture_due(settled, hooked, started.elapsed() > SHOT_TIMEOUT) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
             if let Some(shot) = self.shot.as_mut() {
                 shot.requested = true;
@@ -975,6 +978,10 @@ impl TidemapApp {
     }
 }
 
+
+/// Whether a screenshot run captures now. A pass in which a hook opened a surface never does (the
+/// surface was added after this pass drew), so a settled frame that shows it comes first.
+fn capture_due(settled: bool, hooked: bool, timed_out: bool) -> bool { (settled && !hooked) || timed_out }
 
 impl TidemapApp {
     /// Whether the center shows the rendered Markdown page instead of the diagram canvas.
@@ -1168,7 +1175,7 @@ fn log_frame(ctx: &egui::Context, frame: &eframe::Frame) {
 
 #[cfg(test)]
 mod shot_input_tests {
-    use super::drop_typing;
+    use super::{capture_due, drop_typing};
     use egui::{Event, Key, Modifiers, PointerButton, Pos2};
 
     #[test]
@@ -1183,5 +1190,13 @@ mod shot_input_tests {
         drop_typing(&mut events);
         assert_eq!(events.len(), 2);
         assert!(matches!(events[0], Event::PointerMoved(_)));
+    }
+
+    #[test]
+    fn a_pass_that_fired_a_hook_never_captures_unless_timed_out() {
+        assert!(capture_due(true, false, false));
+        assert!(!capture_due(false, false, false));
+        assert!(!capture_due(true, true, false), "the hook's surface has not been drawn yet");
+        assert!(capture_due(false, true, true), "the timeout still wins");
     }
 }

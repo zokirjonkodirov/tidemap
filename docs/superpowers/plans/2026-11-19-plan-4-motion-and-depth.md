@@ -569,6 +569,8 @@ Recorded by Task 9 (release build, 1440x940, Windows).
 
 **Checks.** `cargo build` and `cargo test --workspace` warning-free; `rg "Popup::menu|selectable_label|ui\.button\(" src` prints nothing; no `motion::(tween|toggle|appear|FAST|BASE|PANEL|CAMERA)` left. Clippy is not installed for this toolchain, so it was not run.
 
+**Task 10 (canvas as a content card).** At 1440x940 with the sidebar open the canvas takes 77.2% of the window (1172x892; planned 77.2%), from `t10-canvas-lines.txt`. Stills in `.superpowers/sdd/2026-11-19-plan-4-motion-and-depth/shots/`: `t10-canvas-{light,dark}.png`, `t10-outline-{light,dark}.png`, `t10-page-{light,dark}.png`, `t10-source-{light,dark}.png`, `t10-narrow.png`.
+
 **Owner checks still outstanding.**
 - Interactive frame budget: toggle the sidebar x5, palette open/close x5, step diagrams x5, switch theme x2 with `TIDEMAP_FRAME_LOG=1`, then confirm p95 of the `frame` lines is at most 8 ms.
 - Slow-motion feel with `TIDEMAP_SLOWMO=4` across panels, dialogs, camera glides and the theme reveal.

@@ -59,8 +59,9 @@ fn medium() -> FontId {
     FontId::new(token::FONT_UI, theme::font_medium())
 }
 
-/// Draws the keyboard focus ring around `rect` when `response` has focus.
-fn focus_ring(ui: &Ui, response: &Response, rect: Rect, radius: f32, p: Palette) {
+/// Draws the keyboard focus ring around `rect` when `response` has focus. Every custom control
+/// that can take focus draws it, so keyboard users can see where they are.
+pub(crate) fn focus_ring(ui: &Ui, response: &Response, rect: Rect, radius: f32, p: Palette) {
     if response.has_focus() {
         ui.painter()
             .rect_stroke(rect, radius, Stroke::new(2.0_f32, p.accent), StrokeKind::Outside);

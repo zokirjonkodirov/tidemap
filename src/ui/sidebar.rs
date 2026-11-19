@@ -684,6 +684,9 @@ fn list(app: &mut TidemapApp, ui: &mut Ui, p: Palette, rows: &Arc<Vec<TreeRow>>,
             if ui.is_rect_visible(band) {
                 ui.painter().rect_filled(band, token::RADIUS_CONTROL, p.accent_soft);
             }
+        } else {
+            // No active row: the next activation starts there instead of gliding from a stale one.
+            controls::restart_band(&ctx, Id::new(ACTIVE_BAND));
         }
         ui.add_space(top_of(start));
         for index in start..end {

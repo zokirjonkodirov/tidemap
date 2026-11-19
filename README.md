@@ -66,7 +66,7 @@ cargo native build     release build
 cargo native run       open the app
 cargo native package   portable zip in release/
 cargo native bench     engine timings
-cargo test --workspace run tests (9, all in crates/diagram)
+cargo test --workspace run the tests (app and diagram engine)
 ```
 
 - Windows: GNU or MSVC toolchain (GNU needs no Visual Studio; see [docs/BUILD_REPORT.md](docs/BUILD_REPORT.md)).

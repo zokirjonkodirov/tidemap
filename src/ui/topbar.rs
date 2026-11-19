@@ -281,6 +281,7 @@ fn project_crumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
+    controls::focus_ring(ui, &response, rect, token::RADIUS_CONTROL, p);
     let color = p.secondary.lerp_to_gamma(p.ink, hover);
     ui.painter().galley(egui::pos2(rect.left() + BLOCK_PAD, rect.center().y - galley.size().y * 0.5), galley, color);
     let chevrons = egui::Rect::from_center_size(
@@ -292,6 +293,17 @@ fn project_crumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     if response.clicked() {
         app.toggle_projects();
     }
+}
+
+/// Size (0 to 1, with a small overshoot) of the unsaved-changes dot for `file`. The dot pops
+/// each time the file turns dirty: its spring is keyed by file and starts over while clean.
+fn dirty_dot(ctx: &Context, file: &str, dirty: bool) -> f32 {
+    let id = Id::new(("crumb-dirty-dot", file));
+    if !dirty {
+        motion::restart(ctx, id);
+        return 0.0;
+    }
+    motion::spring_from(ctx, id, 0.0, 1.0, motion::POP)
 }
 
 fn breadcrumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, open: &Open, budget: f32) {
@@ -344,10 +356,9 @@ fn breadcrumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, open: &Open, 
     );
     let (file_rect, _) = ui.allocate_exact_size(vec2(file.width(), BLOCK_HEIGHT), Sense::hover());
     file.paint(ui.painter(), file_rect.left(), file_rect.center().y, p.ink);
+    let pop = dirty_dot(ui.ctx(), &app.active_file, open.dirty);
     if open.dirty {
         let (rect, _) = ui.allocate_exact_size(vec2(DOT, token::CONTROL), Sense::hover());
-        // Pops in the first time the file turns dirty.
-        let pop = motion::spring_from(ui.ctx(), Id::new("crumb-dirty-dot"), 0.0, 1.0, motion::POP);
         ui.painter().circle_filled(rect.center(), DOT * 0.5 * pop.max(0.0), p.accent);
     }
     if let Some(label) = block_label {
@@ -493,6 +504,7 @@ fn block_button(
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
+    controls::focus_ring(ui, &response, rect, token::RADIUS_CONTROL, p);
     swap.paint(ui.painter(), rect.left() + BLOCK_PAD, rect.center().y, p.secondary);
     let chevron = egui::Rect::from_center_size(
         egui::pos2(rect.right() - BLOCK_PAD - CHEVRON * 0.5, rect.center().y),
@@ -666,7 +678,29 @@ fn right_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
 
 #[cfg(test)]
 mod menu_tests {
-    use super::menu_visible;
+    use super::{dirty_dot, menu_visible};
+
+    #[test]
+    fn the_dirty_dot_pops_again_each_time_a_file_turns_dirty() {
+        let ctx = egui::Context::default();
+        let frame = |time: f64, file: &str, dirty: bool| {
+            let mut value = 0.0;
+            let input = egui::RawInput { time: Some(time), ..Default::default() };
+            let _ = ctx.run(input, |c| value = dirty_dot(c, file, dirty));
+            value
+        };
+        let mut time = 0.0;
+        for _ in 0..200 {
+            time += 0.05;
+            frame(time, "a.md", true);
+        }
+        assert!((frame(time + 0.05, "a.md", true) - 1.0).abs() < 1e-3);
+        // Clean, then dirty again: the dot starts over instead of staying at 1.
+        assert_eq!(frame(20.0, "a.md", false), 0.0);
+        assert!(frame(20.1, "a.md", true) < 0.5);
+        // Another file's dot is its own.
+        assert!(frame(20.2, "b.md", true) < 0.5);
+    }
 
     #[test]
     fn a_menu_is_visible_only_while_its_button_draws_for_the_same_file() {
