@@ -73,7 +73,9 @@ struct Find {
 /// What the page asks the app to do.
 pub enum Action {
     SelectDiagram(String),
-    OpenDiagram(String),
+    /// Open the diagram `String` full size; the rectangle is where its embed is on screen, for
+    /// the embed to grow from.
+    OpenDiagram(String, Rect),
     OpenUrl(String),
     OpenPath(String),
     EditLine(usize),
@@ -1559,7 +1561,8 @@ impl DocView {
                     Kind::Diagram { block, .. } => {
                         if let Some(block) = block.and_then(|b| input.blocks.get(b)) {
                             if count >= 2 {
-                                actions.push(Action::OpenDiagram(block.id.clone()));
+                                let embed = Rect::from_min_max(pos2(x, top), pos2(x + Self::inner_width(leaf, width), origin_y + self.tops[index + 1]));
+                                actions.push(Action::OpenDiagram(block.id.clone(), embed));
                             } else {
                                 self.last_active = block.id.clone();
                                 self.chosen = block.id.clone();

@@ -112,6 +112,12 @@ fn mark_active(ctx: &Context) {
     ctx.request_repaint();
 }
 
+/// Marks this pass as animating for something that runs its own clock (a snapshot reveal)
+/// rather than a tween or spring: [`busy`] reports true and another frame is requested.
+pub fn keep_busy(ctx: &Context) {
+    mark_active(ctx);
+}
+
 /// Whether any tween or spring moved in this pass or the previous one (screenshot mode waits
 /// for this).
 pub fn busy(ctx: &Context) -> bool {

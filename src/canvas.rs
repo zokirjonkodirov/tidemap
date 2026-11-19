@@ -188,6 +188,18 @@ pub fn fit_camera(bounds: Rect, viewport: Vec2, min_zoom: f32) -> Camera {
     Camera { zoom, x, y }
 }
 
+/// The camera that places all of `bounds` inside `target`, a rectangle relative to the
+/// viewport's min corner: the zoom that fits it, centred. A diagram opened from a page embed
+/// starts here, so the embed appears to grow into the canvas.
+pub fn camera_into(bounds: Rect, target: egui::Rect) -> Camera {
+    let zoom = (target.width() / bounds.w.max(1.0)).min(target.height() / bounds.h.max(1.0)).max(f32::EPSILON);
+    Camera {
+        x: target.center().x - (bounds.x + bounds.w * 0.5) * zoom,
+        y: target.center().y - (bounds.y + bounds.h * 0.5) * zoom,
+        zoom,
+    }
+}
+
 pub struct DiagramCanvas {
     pub camera: Camera,
     pub selected: Option<NodeId>,
@@ -235,7 +247,16 @@ pub struct DiagramCanvas {
     follow_fit: bool,
     /// Pass number of the last frame this canvas painted, to tell a fresh appearance from a repaint.
     last_pass: Option<u64>,
+    /// Screen rectangle of the page embed the next shown diagram grows out of, and when it was
+    /// set (motion clock); see [`DiagramCanvas::enter_from`].
+    enter: Option<(egui::Rect, f64)>,
+    /// The running transition is a growth from an embed: no scale-in, no outgoing scene.
+    growing: bool,
 }
+
+/// How long an unused [`DiagramCanvas::enter_from`] stays valid, in motion-clock seconds. A
+/// diagram that never arrives (a render error) must not leak its growth into a later navigation.
+const ENTER_TTL: f64 = 2.0;
 
 /// How quickly a fling slows down (per second, exponential).
 const FLING_DECAY: f32 = 5.5;
@@ -274,6 +295,8 @@ impl Default for DiagramCanvas {
             drag_velocity: Vec2::ZERO,
             follow_fit: false,
             last_pass: None,
+            enter: None,
+            growing: false,
         }
     }
 }
@@ -367,6 +390,13 @@ impl DiagramCanvas {
     /// changes, to slide the breadcrumb the same way.
     pub fn travel(&self) -> Travel {
         self.pending_travel.as_ref().map_or(self.travel, |(travel, _)| *travel)
+    }
+
+    /// Announces that the next diagram to be shown grows out of `from`, the on-screen rectangle
+    /// of its page embed. The canvas starts that diagram's camera inside `from` and glides it to
+    /// the fit; this replaces the transition the navigation would otherwise run.
+    pub fn enter_from(&mut self, ctx: &egui::Context, from: egui::Rect) {
+        self.enter = Some((from, motion::now(ctx)));
     }
 
     /// Whether the camera glides, the diagram transition runs, or dimming eases.
@@ -621,8 +651,10 @@ impl DiagramCanvas {
             let previous = self.shown.take();
             if different_diagram {
                 self.travel = take_travel(&mut self.pending_travel, &artifact.diagram_id);
+                self.growing = false;
+                let grows = self.enter.is_some_and(|(_, at)| motion::now(ui.ctx()) - at < ENTER_TTL);
                 self.outgoing = previous
-                    .filter(|old| !fresh && keeps_outgoing(old.rendered.scene.nodes.len()))
+                    .filter(|old| !fresh && !grows && keeps_outgoing(old.rendered.scene.nodes.len()))
                     .map(|artifact| Outgoing { artifact, camera: self.painted_camera, travel: self.travel });
                 motion::restart(ui.ctx(), egui::Id::new(TRANSITION_ID));
                 self.selected = None;
@@ -638,7 +670,15 @@ impl DiagramCanvas {
             self.restore_pending = false;
         }
         self.shown = Some(artifact.clone());
-        if self.fit_pending {
+        let grow_from = self.enter.take().filter(|(_, at)| motion::now(ui.ctx()) - at < ENTER_TTL);
+        if let Some((from, _)) = grow_from {
+            // The embed grows into the canvas: start inside it and glide to the fit.
+            self.growing = true;
+            self.camera = camera_into(scene.bounds, from.translate(-viewport.min.to_vec2()));
+            self.anim = None;
+            self.fit_pending = false;
+            self.fit();
+        } else if self.fit_pending {
             self.fit();
             if fresh && let Some(anim) = self.anim.take() {
                 self.camera = anim.to;
@@ -865,7 +905,7 @@ impl DiagramCanvas {
         }
         let (offset, _) = travel_offsets(self.travel, progress);
         let mut camera = Camera { x: self.camera.x + offset.x, y: self.camera.y + offset.y, ..self.camera };
-        if self.travel == Travel::Jump {
+        if self.travel == Travel::Jump && !self.growing {
             camera = scaled_about(camera, viewport.size() * 0.5, egui::lerp(JUMP_FROM_SCALE..=1.0, progress));
         }
         let layer = Layer { scene, camera, opacity: motion::fade(progress) };
@@ -1036,6 +1076,15 @@ fn paint_layer(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn camera_into_places_bounds_in_target() {
+        let bounds = Rect { x: 0.0, y: 0.0, w: 400.0, h: 200.0 };
+        let target = egui::Rect::from_min_size(egui::pos2(100.0, 50.0), egui::vec2(200.0, 100.0));
+        let cam = camera_into(bounds, target);
+        assert!((cam.zoom - 0.5).abs() < 1e-4);
+        assert!((cam.x - 100.0).abs() < 1e-3 && (cam.y - 50.0).abs() < 1e-3);
+    }
+
     use super::*;
 
     #[test]

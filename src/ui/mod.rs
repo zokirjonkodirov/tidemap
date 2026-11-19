@@ -20,6 +20,7 @@ pub mod info;
 pub mod palette;
 pub mod pill;
 pub mod sidebar;
+pub mod snapshot;
 pub mod source;
 pub mod states;
 pub mod surface;

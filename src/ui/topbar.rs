@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use egui::{Align, Color32, Context, FontId, Galley, Id, Layout, Painter, Pos2, Sense, UiBuilder, vec2};
-use tidemap_model::Theme;
 
 use super::{controls, info, surface};
 use crate::{
@@ -640,9 +639,10 @@ fn right_side(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     } else {
         (Icon::Moon, "Switch to the dark appearance · Ctrl+Shift+D")
     };
-    if icons::button(ui, icon, tooltip, false, true).clicked() {
-        app.settings.theme = if app.dark { Theme::Light } else { Theme::Dark };
-        app.save_settings();
+    let theme_button = icons::button(ui, icon, tooltip, false, true);
+    app.theme_anchor = theme_button.rect;
+    if theme_button.clicked() {
+        app.request_theme_toggle(theme_button.rect.center());
     }
     let markdown = app.buffers.get(&app.active_file).is_some_and(|buffer| !buffer.document.name.to_lowercase().ends_with(".mmd"));
     if markdown {
