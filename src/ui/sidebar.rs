@@ -435,7 +435,7 @@ fn search_field(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
         ctx.memory_mut(|memory| memory.request_focus(id));
     }
     let focused = ctx.memory(|memory| memory.has_focus(id));
-    let focus = motion::toggle(ctx, id.with("focus-ring"), focused, motion::FAST);
+    let focus = motion::spring(ctx, id.with("focus-ring"), f32::from(u8::from(focused)), motion::SNAP);
     let hover = motion::hover(ctx, id, field.hovered() && !focused);
     ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.app);
     if hover > 0.0 {
@@ -471,12 +471,12 @@ fn search_field(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
     let slot = Rect::from_center_size(egui::pos2(rect.right() - 17.0, rect.center().y), vec2(22.0, 22.0));
     let has_text = !app.tree_query.is_empty();
     // The shortcut as a quiet key cap while the field is idle and empty; a clear button once there is text.
-    let cap = motion::toggle(ctx, id.with("cap"), !has_text && !focused, motion::BASE);
+    let cap = motion::spring(ctx, id.with("cap"), f32::from(u8::from(!has_text && !focused)), motion::SOFT);
     if cap > 0.0 {
         ui.painter().rect_filled(slot, 6.0, p.field.gamma_multiply(cap));
         ui.painter().text(slot.center(), egui::Align2::CENTER_CENTER, "/", FontId::proportional(token::FONT_SMALL), p.muted.gamma_multiply(cap));
     }
-    let clear = motion::toggle(ctx, id.with("clear"), has_text, motion::BASE);
+    let clear = motion::spring(ctx, id.with("clear"), f32::from(u8::from(has_text)), motion::SOFT);
     if clear > 0.0 {
         let response = ui.interact(slot, id.with("clear-hit"), if has_text { Sense::click() } else { Sense::hover() });
         let over = motion::hover(ctx, id.with("clear-hover"), response.hovered() && has_text);
@@ -829,7 +829,7 @@ fn file_or_folder_row(
         let lead = if row.directory {
             // The chevron turns as the folder folds and unfolds. It is a little lighter and smaller
             // than a file icon: the name is what matters.
-            let turn = motion::toggle(&ctx, row_id.with("chevron"), row.expanded, motion::BASE);
+            let turn = motion::spring(&ctx, row_id.with("chevron"), f32::from(u8::from(row.expanded)), motion::SOFT);
             let chevron = Rect::from_center_size(egui::pos2(left + CHEVRON * 0.5, rect.center().y), vec2(CHEVRON, CHEVRON));
             icons::paint_rotated(
                 &painter,
@@ -905,7 +905,7 @@ fn file_or_folder_row(
         let pinned = app.state.pins.contains(id);
         response.context_menu(|ui| {
             let label = if pinned { "Unpin" } else { "Pin" };
-            if ui.button(label).clicked() {
+            if controls::quiet_button(ui, label).clicked() {
                 if pinned {
                     actions.unpin = Some(id.clone());
                 } else {
@@ -913,7 +913,7 @@ fn file_or_folder_row(
                 }
                 ui.close();
             }
-            if ui.button("Reveal in file manager").clicked() {
+            if controls::quiet_button(ui, "Reveal in file manager").clicked() {
                 actions.reveal = Some(row.path.clone());
                 ui.close();
             }
@@ -949,7 +949,7 @@ fn footer_row(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.label(egui::RichText::new(text).size(token::FONT_SMALL).color(p.muted));
             // A re-index after a change on disk: a soft breathing dot, not a word that flickers.
-            let shown = motion::toggle(ui.ctx(), Id::new("sidebar-busy"), busy, motion::BASE);
+            let shown = motion::spring(ui.ctx(), Id::new("sidebar-busy"), f32::from(u8::from(busy)), motion::SOFT);
             if shown > 0.0 {
                 let time = ui.input(|input| input.time) as f32;
                 let breathe = 0.45 + 0.35 * (time * 5.0).sin();

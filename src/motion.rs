@@ -1,51 +1,20 @@
-//! Motion: springs and small eased tweens keyed by `egui::Id`, so any surface can animate a
-//! value without owning a timer.
+//! Motion: springs keyed by `egui::Id`, so any surface can animate a value without owning a
+//! timer.
 //!
-//! Springs ([`spring`], [`hover`], [`press`], [`presence`]) are the primary tool. They carry
-//! velocity, so retargeting mid-flight (a hover that reverses, a panel toggled twice) bends
-//! the motion instead of restarting it. The older eased tweens remain for surfaces that have
-//! not moved over yet.
-//!
-//! A tween snaps to its first target (nothing animates on first sight unless asked) and,
-//! when the target changes, eases from wherever it currently is. Retargeting mid-flight is
-//! therefore smooth, which matters for hover and for panels toggled quickly.
-
-// The spring API lands ahead of its callers (hover, press, panels, camera follow in later
-// tasks); drop this once they use it.
-#![allow(dead_code)]
+//! Springs ([`spring`], [`hover`], [`press`], [`presence`]) carry velocity, so retargeting
+//! mid-flight (a hover that reverses, a panel toggled twice) bends the motion instead of
+//! restarting it. A spring snaps to its first target: nothing animates on first sight unless
+//! asked. With reduced motion on ([`set_reduced`]) springs resolve at once and only
+//! [`presence`] still fades, so surfaces do not blink in and out.
 
 use egui::{Context, Id};
 use std::f32::consts::TAU;
 
-/// Hover, press and other feedback that must feel immediate.
-pub const FAST: f32 = 0.12;
-/// Popovers, highlights, selection.
-pub const BASE: f32 = 0.18;
-/// Panels sliding in and out.
-pub const PANEL: f32 = 0.26;
-
-/// Decelerating curve with a soft landing (close to CSS `cubic-bezier(0.2, 0.8, 0.2, 1)`).
+/// Decelerating curve with a soft landing (close to CSS `cubic-bezier(0.2, 0.8, 0.2, 1)`),
+/// for effects timed by hand rather than by a spring.
 pub fn ease_out(t: f32) -> f32 {
     let u = 1.0 - t.clamp(0.0, 1.0);
     1.0 - u * u * u * u
-}
-
-/// Ease out with a slight overshoot, for things that pop in (key caps, badges).
-pub fn ease_out_back(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    let c1 = 1.4;
-    let c3 = c1 + 1.0;
-    1.0 + c3 * (t - 1.0).powi(3) + c1 * (t - 1.0).powi(2)
-}
-
-#[derive(Clone, Copy)]
-struct Tween {
-    from: f32,
-    to: f32,
-    start: f64,
-    duration: f32,
-    value: f32,
-    easing: fn(f32) -> f32,
 }
 
 /// The motion clock in seconds: input time divided by the slow-motion scale. Anything that
@@ -54,51 +23,6 @@ struct Tween {
 pub fn now(ctx: &Context) -> f64 {
     let time = ctx.input(|input| input.time);
     time / f64::from(time_scale(ctx))
-}
-
-/// Eases the value stored under `id` toward `target`. The first call returns `target`.
-pub fn tween(ctx: &Context, id: Id, target: f32, duration: f32, easing: fn(f32) -> f32) -> f32 {
-    tween_from(ctx, id, target, target, duration, easing)
-}
-
-/// Like [`tween`], but the first call starts at `initial` and animates toward `target`.
-pub fn tween_from(
-    ctx: &Context,
-    id: Id,
-    initial: f32,
-    target: f32,
-    duration: f32,
-    easing: fn(f32) -> f32,
-) -> f32 {
-    let id = id.with("motion-tween");
-    let time = now(ctx);
-    let previous = ctx.data(|data| data.get_temp::<Tween>(id));
-    let mut tween = previous.unwrap_or(Tween {
-        from: initial,
-        to: target,
-        start: time,
-        duration,
-        value: initial,
-        easing,
-    });
-    if (tween.to - target).abs() > f32::EPSILON {
-        tween = Tween { from: tween.value, to: target, start: time, duration, value: tween.value, easing };
-    }
-    let t = if tween.duration <= 0.0 {
-        1.0
-    } else {
-        ((time - tween.start) as f32 / tween.duration).clamp(0.0, 1.0)
-    };
-    tween.value = if t >= 1.0 {
-        tween.to
-    } else {
-        tween.from + (tween.to - tween.from) * (tween.easing)(t)
-    };
-    ctx.data_mut(|data| data.insert_temp(id, tween));
-    if t < 1.0 {
-        mark_active(ctx);
-    }
-    tween.value
 }
 
 const ACTIVE_PASS: &str = "motion-active-pass";
@@ -113,12 +37,12 @@ fn mark_active(ctx: &Context) {
 }
 
 /// Marks this pass as animating for something that runs its own clock (a snapshot reveal)
-/// rather than a tween or spring: [`busy`] reports true and another frame is requested.
+/// rather than a spring: [`busy`] reports true and another frame is requested.
 pub fn keep_busy(ctx: &Context) {
     mark_active(ctx);
 }
 
-/// Whether any tween or spring moved in this pass or the previous one (screenshot mode waits
+/// Whether any spring moved in this pass or the previous one (screenshot mode waits
 /// for this).
 pub fn busy(ctx: &Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
@@ -126,21 +50,10 @@ pub fn busy(ctx: &Context) -> bool {
         .is_some_and(|active| active + 1 >= pass)
 }
 
-/// 0 to 1 as `on` becomes true, back to 0 as it becomes false. Snaps on first sight.
-pub fn toggle(ctx: &Context, id: Id, on: bool, duration: f32) -> f32 {
-    tween(ctx, id, f32::from(u8::from(on)), duration, ease_out)
-}
-
-/// Like [`toggle`], but the first sight of `on == true` animates in from 0.
-pub fn appear(ctx: &Context, id: Id, on: bool, duration: f32) -> f32 {
-    tween_from(ctx, id, 0.0, f32::from(u8::from(on)), duration, ease_out)
-}
-
-/// Restarts the animation under `id` (for a surface that opens again): the tween and any
-/// spring, [`hover`], [`press`] or [`presence`] state keyed by `id` start from scratch.
+/// Restarts the animation under `id` (for a surface that opens again): any [`spring`],
+/// [`hover`], [`press`] or [`presence`] state keyed by `id` starts from scratch.
 pub fn restart(ctx: &Context, id: Id) {
     ctx.data_mut(|data| {
-        data.remove::<Tween>(id.with("motion-tween"));
         for suffix in SPRING_SUFFIXES {
             data.remove::<Stored>(spring_key(id, suffix));
         }
@@ -148,17 +61,12 @@ pub fn restart(ctx: &Context, id: Id) {
     });
 }
 
-/// Whether the tween or spring under `id` is still moving.
+/// Whether a spring under `id` is still moving.
 pub fn moving(ctx: &Context, id: Id) -> bool {
-    let time = now(ctx);
     ctx.data(|data| {
-        let tween = data
-            .get_temp::<Tween>(id.with("motion-tween"))
-            .is_some_and(|tween| (time - tween.start) < f64::from(tween.duration) && tween.value != tween.to);
-        tween
-            || SPRING_SUFFIXES.iter().any(|suffix| {
-                data.get_temp::<Stored>(spring_key(id, suffix)).is_some_and(|stored| !stored.at_rest())
-            })
+        SPRING_SUFFIXES
+            .iter()
+            .any(|suffix| data.get_temp::<Stored>(spring_key(id, suffix)).is_some_and(|stored| !stored.at_rest()))
     })
 }
 
@@ -351,10 +259,42 @@ pub fn press(ctx: &Context, id: Id, down: bool) -> f32 {
 /// `open`, springs out quickly when closed, and returns `None` once fully closed so the
 /// caller can stop drawing it. Reopening mid-exit continues from the current position and
 /// momentum. The value is never negative: a closing spring that undershoots 0 reads as 0.
+///
+/// With reduced motion on, the value ramps linearly to its target over [`REDUCED_FADE`]
+/// seconds instead, so the surface still fades but neither pops nor overshoots.
 pub fn presence(ctx: &Context, id: Id, open: bool) -> Option<f32> {
-    let (target, feel) = if open { (1.0, POP) } else { (0.0, SNAP) };
-    let value = spring_at(ctx, spring_key(id, "presence"), 0.0, target, feel).max(0.0);
+    let key = spring_key(id, "presence");
+    let value = if reduced(ctx) {
+        ramp_at(ctx, key, f32::from(u8::from(open)))
+    } else {
+        let (target, feel) = if open { (1.0, POP) } else { (0.0, SNAP) };
+        spring_at(ctx, key, 0.0, target, feel).max(0.0)
+    };
     (open || value > 0.0).then_some(value)
+}
+
+/// Seconds a [`presence`] takes to fade fully in or out under reduced motion.
+pub const REDUCED_FADE: f32 = 0.15;
+
+/// Moves the value stored under `key` toward `target` at a constant rate, taking
+/// [`REDUCED_FADE`] seconds to cross 0 to 1. Starts at 0.
+fn ramp_at(ctx: &Context, key: Id, target: f32) -> f32 {
+    let time = now(ctx);
+    let mut stored = ctx.data(|data| data.get_temp::<Stored>(key)).unwrap_or(Stored {
+        state: SpringState::default(),
+        target,
+        last: time,
+    });
+    let reach = ((time - stored.last).max(0.0) as f32 / REDUCED_FADE).min(1.0);
+    let gap = target - stored.state.value;
+    stored.state = SpringState { value: stored.state.value + gap.clamp(-reach, reach), velocity: 0.0 };
+    stored.target = target;
+    stored.last = time;
+    ctx.data_mut(|data| data.insert_temp(key, stored));
+    if !stored.at_rest() {
+        mark_active(ctx);
+    }
+    stored.state.value
 }
 
 /// Maps elapsed motion time `t` (seconds) to a 0-to-1 opacity ramp over 0.6 s. Opacity is
@@ -366,7 +306,8 @@ pub fn fade(t: f32) -> f32 {
 const REDUCED: &str = "motion-reduced";
 const TIME_SCALE: &str = "motion-time-scale";
 
-/// Turns reduced motion on or off. When on, springs jump straight to their targets.
+/// Turns reduced motion on or off. When on, springs jump straight to their targets (and
+/// [`presence`] fades briefly).
 pub fn set_reduced(ctx: &Context, on: bool) {
     ctx.data_mut(|data| data.insert_temp(Id::new(REDUCED), on));
 }
@@ -374,6 +315,48 @@ pub fn set_reduced(ctx: &Context, on: bool) {
 /// Whether reduced motion is on.
 pub fn reduced(ctx: &Context) -> bool {
     ctx.data(|data| data.get_temp::<bool>(Id::new(REDUCED))).unwrap_or(false)
+}
+
+/// Whether the operating system asks for less animation. Windows reports it through
+/// "Show animations in Windows"; other platforms report false.
+#[cfg(windows)]
+pub fn system_reduced() -> bool {
+    use windows_sys::{
+        Win32::UI::WindowsAndMessaging::{SPI_GETCLIENTAREAANIMATION, SystemParametersInfoW},
+        core::BOOL,
+    };
+    let mut animations: BOOL = 1;
+    // SAFETY: SPI_GETCLIENTAREAANIMATION writes one BOOL through `pvParam`, which points at
+    // a live, writable local for the whole call; `uiParam` and `fWinIni` are unused (0).
+    let read = unsafe { SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&raw mut animations).cast(), 0) };
+    read != 0 && animations == 0
+}
+
+/// Whether the operating system asks for less animation (always false on this platform).
+#[cfg(not(windows))]
+pub fn system_reduced() -> bool {
+    false
+}
+
+/// What the last system read said, and whether the window was focused when it was taken.
+#[derive(Clone, Copy)]
+struct SystemRead {
+    reduced: bool,
+    focused: bool,
+}
+
+/// The system's reduced-motion flag without asking the OS every frame: `read` runs on the
+/// first call and whenever the window regains focus (the moment a user returns from changing
+/// the setting); every other frame returns the remembered answer.
+pub fn system_preference(ctx: &Context, focused: bool, read: impl FnOnce() -> bool) -> bool {
+    let key = Id::new("motion-system-read");
+    let last = ctx.data(|data| data.get_temp::<SystemRead>(key));
+    let reduced = match last {
+        Some(last) if !focused || last.focused => last.reduced,
+        _ => read(),
+    };
+    ctx.data_mut(|data| data.insert_temp(key, SystemRead { reduced, focused }));
+    reduced
 }
 
 /// Slows (or speeds) all motion by dividing the motion clock by `scale`, for inspecting
@@ -527,5 +510,69 @@ mod tests {
         let mut v = 0.0;
         at(&ctx, 0.1, |c| v = spring(c, id, 1.0, GLIDE));
         assert!((v - step(GLIDE, 0.01)).abs() < 0.02);
+    }
+
+    #[test]
+    fn system_flag_is_read_at_start_and_on_focus_gain_only() {
+        let ctx = Context::default();
+        let reads = std::cell::Cell::new(0);
+        let ask = |focused: bool, answer: bool| {
+            let mut out = false;
+            at(&ctx, 0.0, |c| out = system_preference(c, focused, || { reads.set(reads.get() + 1); answer }));
+            out
+        };
+        assert!(ask(true, true));
+        assert!(ask(true, false), "still focused: remembered");
+        assert!(ask(false, false), "lost focus: remembered");
+        assert!(!ask(true, false), "regained focus: read again");
+        assert_eq!(reads.get(), 2);
+    }
+
+    #[test]
+    fn busy_is_true_while_a_spring_moves() {
+        let ctx = Context::default();
+        let id = Id::new("b");
+        at(&ctx, 0.0, |c| { spring(c, id, 0.0, GLIDE); });
+        let mut busy_now = false;
+        at(&ctx, 0.016, |c| { spring(c, id, 1.0, GLIDE); busy_now = busy(c); });
+        assert!(busy_now);
+    }
+
+    #[test]
+    fn restart_clears_spring_state_and_moving_reports_motion() {
+        let ctx = Context::default();
+        let id = Id::new("rs");
+        at(&ctx, 0.0, |c| { spring(c, id, 0.0, GLIDE); });
+        at(&ctx, 0.016, |c| { spring(c, id, 1.0, GLIDE); });
+        let mut was_moving = false;
+        at(&ctx, 0.02, |c| was_moving = moving(c, id));
+        assert!(was_moving);
+        let mut v = 0.0;
+        at(&ctx, 0.03, |c| { restart(c, id); v = spring(c, id, 1.0, GLIDE); });
+        assert_eq!(v, 1.0, "restart must forget the old position");
+        let mut still = true;
+        at(&ctx, 0.04, |c| still = moving(c, id));
+        assert!(!still);
+    }
+
+    #[test]
+    fn presence_under_reduced_ramps_linearly_over_a_short_fade() {
+        let ctx = Context::default();
+        let id = Id::new("pr");
+        at(&ctx, 0.0, |c| { set_reduced(c, true); presence(c, id, true); });
+        let mut early = None;
+        at(&ctx, 0.016, |c| early = presence(c, id, true));
+        assert!(early.unwrap() < 0.5, "must not jump in one frame: {early:?}");
+        let mut mid = None;
+        at(&ctx, 0.075, |c| mid = presence(c, id, true));
+        assert!((mid.unwrap() - 0.5).abs() < 0.1, "linear halfway: {mid:?}");
+        let mut done = None;
+        at(&ctx, 0.17, |c| done = presence(c, id, true));
+        assert_eq!(done, Some(1.0));
+        let mut closing = Some(1.0);
+        at(&ctx, 0.2, |c| closing = presence(c, id, false));
+        assert!(closing.unwrap() > 0.0);
+        at(&ctx, 0.4, |c| closing = presence(c, id, false));
+        assert_eq!(closing, None);
     }
 }

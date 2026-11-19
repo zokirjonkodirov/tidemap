@@ -145,7 +145,7 @@ fn big_file_frames_stay_fast() {
     let mut rig = Rig::new(&text);
     rig.markdown = false;
     rig.focus();
-    let mut measure = |rig: &mut Rig, name: &str, events: &dyn Fn() -> Vec<Event>, n: usize| -> f64 {
+    let measure = |rig: &mut Rig, name: &str, events: &dyn Fn() -> Vec<Event>, n: usize| -> f64 {
         let started = Instant::now();
         for _ in 0..n {
             rig.frame(events());

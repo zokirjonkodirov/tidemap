@@ -28,6 +28,7 @@ pub enum Command {
     ZoomOut,
     ExportDiagram,
     ToggleTheme,
+    ToggleReducedMotion,
     SwitchProject,
     OpenFolder,
     OpenFile,
@@ -46,7 +47,7 @@ pub enum Command {
 }
 
 /// Command, title and shortcut text (empty when there is no shortcut), in display order.
-pub const COMMANDS: [(Command, &str, &str); 25] = [
+pub const COMMANDS: [(Command, &str, &str); 26] = [
     (Command::SwitchProject, "Switch project", "Ctrl+R"),
     (Command::Save, "Save", "Ctrl+S"),
     (Command::SaveCopy, "Save a copy", "Ctrl+Shift+S"),
@@ -66,6 +67,7 @@ pub const COMMANDS: [(Command, &str, &str); 25] = [
     (Command::ToggleDocument, "Switch between the page and the diagram", "Ctrl+Shift+M"),
     (Command::ExportDiagram, "Export diagram", "Ctrl+Shift+X"),
     (Command::ToggleTheme, "Switch light or dark appearance", "Ctrl+Shift+D"),
+    (Command::ToggleReducedMotion, "Toggle reduced motion", ""),
     (Command::OpenFolder, "Open folder", "Ctrl+Shift+O"),
     (Command::OpenFile, "Open file", "Ctrl+O"),
     (Command::NewDiagram, "New diagram", "Ctrl+N"),
@@ -290,6 +292,7 @@ fn command_icon(command: Command, dark: bool) -> Icon {
                 Icon::Moon
             }
         }
+        Command::ToggleReducedMotion => Icon::Settings,
         Command::OpenFolder => Icon::FolderOpen,
         Command::OpenFile => Icon::File,
         Command::NewDiagram => Icon::FilePlus,

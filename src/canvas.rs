@@ -382,6 +382,11 @@ impl DiagramCanvas {
     fn tick_anim(&mut self, dt: f32) {
         let Some(anim) = &mut self.anim else { return };
         let to = anim.to;
+        if self.reduced_motion {
+            self.camera = to;
+            self.anim = None;
+            return;
+        }
         motion::advance(&mut anim.x, to.x, motion::GLIDE, dt);
         motion::advance(&mut anim.y, to.y, motion::GLIDE, dt);
         motion::advance(&mut anim.log_zoom, log_zoom(to.zoom), motion::GLIDE, dt);
@@ -883,7 +888,7 @@ impl DiagramCanvas {
         // Dimming eases in with a selection and out after it, painting the last emphasis
         // while it fades.
         let active = self.selected.is_some() || self.selected_edge.is_some();
-        let dim = motion::toggle(ui.ctx(), egui::Id::new(DIM_ID), active, motion::BASE);
+        let dim = motion::spring(ui.ctx(), egui::Id::new(DIM_ID), f32::from(u8::from(active)), motion::SOFT);
         if active {
             self.fade = Fade { selected: self.selected, edges: strong_edges.to_vec(), nodes: strong_nodes.to_vec() };
         } else if dim <= 0.0 {
@@ -930,7 +935,7 @@ impl DiagramCanvas {
         self.painted_frames = self.painted_frames.saturating_add(1);
         self.last_stats = Some(stats);
         // A quiet pill fades in while labels are hidden, above the zoom pill.
-        let hint = motion::toggle(ui.ctx(), egui::Id::new("canvas-lod-hint"), stats.lod != Lod::Full, motion::BASE);
+        let hint = motion::spring(ui.ctx(), egui::Id::new("canvas-lod-hint"), f32::from(u8::from(stats.lod != Lod::Full)), motion::SOFT);
         if hint > 0.0 {
             let galley = painter.layout_no_wrap(
                 "Zoom in for labels".to_owned(),
@@ -1067,7 +1072,7 @@ pub fn paint_card(
                         .color(p.secondary),
                 );
                 ui.add_space(token::SPACE[3]);
-                pressed = ui.button(button).clicked();
+                pressed = crate::ui::controls::primary_button(ui, button).clicked();
             });
         });
     pressed
@@ -1115,6 +1120,20 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn reduced_motion_lands_a_glide_in_flight_at_once() {
+        let mut canvas = DiagramCanvas::default();
+        canvas.camera = Camera { x: 0.0, y: 0.0, zoom: 1.0 };
+        let to = Camera { x: 40.0, y: 10.0, zoom: 2.0 };
+        canvas.animate_to(to);
+        canvas.tick_anim(1.0 / 60.0);
+        assert!(canvas.camera.zoom < 2.0, "still gliding");
+        canvas.reduced_motion = true;
+        canvas.tick_anim(1.0 / 60.0);
+        assert_eq!((canvas.camera.x, canvas.camera.y, canvas.camera.zoom), (to.x, to.y, to.zoom));
+        assert!(canvas.anim.is_none());
+    }
 
     #[test]
     fn camera_retarget_keeps_velocity() {

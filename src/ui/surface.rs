@@ -60,9 +60,16 @@ pub fn exit_t(t: f32) -> f32 {
     0.6 + 0.4 * t
 }
 
-/// Sets the transform of `layer` for presence `t`; at rest it removes the transform.
+/// [`transform`] for the current motion preference: under reduced motion nothing scales or
+/// slides, so a surface only fades.
+pub fn placed(ctx: &Context, t: f32, origin: Pos2, enter: Enter) -> TSTransform {
+    if motion::reduced(ctx) { TSTransform::IDENTITY } else { transform(t, origin, enter) }
+}
+
+/// Sets the transform of `layer` for presence `t`; at rest (or under reduced motion) it
+/// removes the transform.
 pub fn animate_layer(ctx: &Context, layer: LayerId, t: f32, origin: Pos2, enter: Enter) {
-    ctx.set_transform_layer(layer, transform(t, origin, enter));
+    ctx.set_transform_layer(layer, placed(ctx, t, origin, enter));
 }
 
 /// The layer of the pill that floats over the canvas.
@@ -89,13 +96,13 @@ fn push_transform(t: f32, centre: Pos2) -> TSTransform {
 
 /// Sinks the window behind a modal: the background and the pill scale about the screen centre
 /// to [`PUSH_SCALE`] as `t` goes from 0 to 1. Call once per frame with the strongest modal
-/// presence; at `t == 0` the transforms are removed.
+/// presence; at `t == 0` (or under reduced motion) the transforms are removed.
 ///
 /// The toast layer is deliberately left alone: it has its own entrance transform, so it reads
 /// this one back with [`pushed`] and composes `pushed * enter` itself. That way neither
 /// overwrites the other.
 pub fn push_back(ctx: &Context, t: f32) {
-    let push = push_transform(t, ctx.content_rect().center());
+    let push = push_transform(if motion::reduced(ctx) { 0.0 } else { t }, ctx.content_rect().center());
     ctx.data_mut(|data| data.insert_temp(Id::new(PUSH_KEY), push));
     ctx.set_transform_layer(LayerId::background(), push);
     ctx.set_transform_layer(pill_layer(), push);
@@ -166,7 +173,7 @@ pub fn modal<R>(
     let shown_t = if open { t } else { exit_t(t) };
     let content = |ui: &mut Ui| {
         ui.multiply_opacity(alpha);
-        ui.with_visual_transform(transform(shown_t, place.origin, place.enter), |ui| add(ui, open)).inner
+        ui.with_visual_transform(placed(ctx, shown_t, place.origin, place.enter), |ui| add(ui, open)).inner
     };
     if open {
         let area = egui::Modal::default_area(place.id).fade_in(false).anchor(place.anchor, place.offset);
@@ -245,6 +252,20 @@ mod tests {
         assert!(ctx.layer_transform_to_global(LayerId::background()).is_none());
         assert!(ctx.layer_transform_to_global(pill).is_none());
         assert_eq!(pushed(&ctx), TSTransform::IDENTITY);
+    }
+
+    #[test]
+    fn reduced_motion_drops_movement_but_keeps_the_layer_plain() {
+        let ctx = egui::Context::default();
+        let layer = LayerId::new(egui::Order::Foreground, egui::Id::new("r"));
+        let _ = ctx.run(Default::default(), |c| {
+            crate::motion::set_reduced(c, true);
+            assert_eq!(placed(c, 0.3, egui::Pos2::ZERO, POPOVER), TSTransform::IDENTITY);
+            animate_layer(c, layer, 0.3, egui::Pos2::ZERO, POPOVER);
+            push_back(c, 1.0);
+        });
+        assert!(ctx.layer_transform_to_global(layer).is_none());
+        assert!(ctx.layer_transform_to_global(LayerId::background()).is_none());
     }
 
     #[test]

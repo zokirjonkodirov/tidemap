@@ -455,7 +455,7 @@ pub fn button(
         let hovered = enabled && response.hovered();
         let pressed = enabled && response.is_pointer_button_down_on();
         let hover = motion::hover(&ctx, response.id, hovered);
-        let on = motion::toggle(&ctx, response.id.with("selected"), selected, motion::BASE);
+        let on = motion::spring(&ctx, response.id.with("selected"), f32::from(u8::from(selected)), motion::SOFT);
         let press = motion::press(&ctx, response.id, pressed);
         let body = controls::pressed_rect(rect, press);
         let painter = ui.painter();

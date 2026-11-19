@@ -5,7 +5,7 @@
 
 use egui::{Align, Context, Frame, Id, Layout, Margin, RichText, Ui, vec2};
 use tidemap_diagram::ColorBy;
-use tidemap_model::{ExportFormat, Theme};
+use tidemap_model::{ExportFormat, MotionPref, Theme};
 use tidemap_renderer::export;
 
 pub use super::controls::{danger_button, primary_button, quiet_button};
@@ -224,6 +224,11 @@ fn settings(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
             changed |= segmented(ui, &mut app.settings.theme, &options);
         });
 
+        row(ui, p, "Motion", "Reduced keeps fades but drops movement", |ui| {
+            let options = [(MotionPref::System, "System"), (MotionPref::Reduced, "Reduced"), (MotionPref::Full, "Full")];
+            changed |= segmented(ui, &mut app.settings.motion, &options);
+        });
+
         group(ui, p, "Diagram style");
         let mut color_by = app.style_file.sheet.color_by;
         row(ui, p, "Colour nodes by", "", |ui| {
@@ -418,6 +423,7 @@ const SHORTCUT_GROUPS: [(&str, &[(&str, &str)]); 7] = [
         ("Show or hide sidebar", "Ctrl+B"),
         ("Show or hide the outline", "Ctrl+Shift+L"),
         ("Switch light or dark", "Ctrl+Shift+D"),
+        ("Toggle reduced motion (run a command)", "Ctrl+Shift+P"),
         ("Settings", "Ctrl+,"),
         ("This list", "Ctrl+/ or ? or F1"),
     ]),

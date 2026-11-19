@@ -119,7 +119,7 @@ pub fn switch(ui: &mut Ui, value: &mut bool) -> bool {
         changed = true;
     }
     // The knob travels with a slight overshoot; the colour follows without one.
-    let travel_t = motion::tween(ui.ctx(), response.id.with("switch"), f32::from(u8::from(*value)), motion::BASE + 0.04, motion::ease_out_back);
+    let travel_t = motion::spring(ui.ctx(), response.id.with("switch"), f32::from(u8::from(*value)), motion::POP);
     let on = travel_t.clamp(0.0, 1.0);
     let track = Rect::from_center_size(area.center(), SWITCH_SIZE);
     let track_color = p.track_off.lerp_to_gamma(p.accent, on);

@@ -11,6 +11,17 @@ pub enum Theme {
     Light,
     Dark,
 }
+/// Whether the interface keeps its movement (springs, slides, zooms) or only fades.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MotionPref {
+    /// Follow the operating system's animation setting.
+    #[default]
+    System,
+    /// Fades only: nothing moves or scales.
+    Reduced,
+    /// All motion, whatever the system says.
+    Full,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -20,6 +31,7 @@ pub struct Settings {
     pub show_minimap: bool,
     pub sidebar_width: f32,
     pub editor_width: f32,
+    pub motion: MotionPref,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -30,6 +42,7 @@ impl Default for Settings {
             show_minimap: false,
             sidebar_width: 258.0,
             editor_width: 440.0,
+            motion: MotionPref::System,
         }
     }
 }
@@ -265,4 +278,15 @@ pub enum RenderEvent {
         job_id: u64,
         result: Result<PathBuf, String>,
     },
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_default_motion_to_system() {
+        let s: Settings = serde_json::from_str(r#"{"theme":"Light","autosave":true}"#).unwrap();
+        assert_eq!(s.motion, MotionPref::System);
+    }
 }

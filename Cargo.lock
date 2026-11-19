@@ -3296,6 +3296,7 @@ dependencies = [
  "tidemap-model",
  "tidemap-renderer",
  "unicode-segmentation",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3328,6 +3329,7 @@ name = "tidemap-model"
 version = "0.2.0"
 dependencies = [
  "serde",
+ "serde_json",
  "tidemap-diagram",
 ]
 

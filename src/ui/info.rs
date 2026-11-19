@@ -431,7 +431,9 @@ pub fn toast(app: &TidemapApp, ctx: &Context, canvas: Rect, p: Palette) {
     let origin = canvas.left_bottom() + vec2(token::SPACE[3], -token::SPACE[3]);
     // Entering: grow from the corner. Leaving: no scale, just sink a little.
     let own = if open {
-        surface::transform(t, origin, surface::TOAST)
+        surface::placed(ctx, t, origin, surface::TOAST)
+    } else if motion::reduced(ctx) {
+        TSTransform::IDENTITY
     } else {
         TSTransform::from_translation(vec2(0.0, TOAST_SINK * (1.0 - t)))
     };

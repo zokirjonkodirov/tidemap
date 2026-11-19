@@ -443,7 +443,7 @@ impl DocView {
     }
 
     fn find_bar(&mut self, ctx: &Context, rect: Rect, p: Palette) {
-        let shown = motion::appear(ctx, Id::new("page-find"), self.find.open, motion::BASE);
+        let shown = motion::spring_from(ctx, Id::new("page-find"), 0.0, f32::from(u8::from(self.find.open)), motion::POP).clamp(0.0, 1.0);
         if shown < 0.01 {
             return;
         }
@@ -1409,7 +1409,7 @@ impl DocView {
         let bar = ui.interact(track, Id::new("document-bar"), Sense::click_and_drag());
         let near = ctx.pointer_hover_pos().is_some_and(|pos| pos.x > rect.right() - 36.0 && rect.contains(pos));
         let active = bar.dragged() || near || now < self.bar_alpha_until;
-        let show = motion::toggle(ctx, Id::new("document-bar-show"), active, motion::BASE);
+        let show = motion::spring(ctx, Id::new("document-bar-show"), f32::from(u8::from(active)), motion::SOFT);
         if now < self.bar_alpha_until {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }

@@ -437,6 +437,10 @@ impl TidemapApp {
                 let from = if self.theme_anchor.is_positive() { self.theme_anchor.center() } else { self.ctx.content_rect().right_top() };
                 self.request_theme_toggle(from);
             }
+            Command::ToggleReducedMotion => {
+                self.settings.motion = if crate::motion::reduced(&self.ctx) { MotionPref::Full } else { MotionPref::Reduced };
+                self.save_settings();
+            }
             Command::OpenFolder => self.open_folder(None),
             Command::OpenFile => self.open_external(None),
             Command::NewDiagram => self.new_diagram(),
@@ -1089,7 +1093,7 @@ impl eframe::App for TidemapApp {
         egui::Rgba::from(theme::palette(self.dark).app).to_array()
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         static SLOWMO: std::sync::Once = std::sync::Once::new();
         SLOWMO.call_once(|| {
             // `TIDEMAP_SLOWMO=4` plays every animation four times slower; junk means 1.
@@ -1099,6 +1103,9 @@ impl eframe::App for TidemapApp {
                 .unwrap_or(1.0);
             crate::motion::set_time_scale(ctx, scale);
         });
+        let focused = ctx.input(|input| input.viewport().focused).unwrap_or(true);
+        let system = crate::motion::system_preference(ctx, focused, crate::motion::system_reduced);
+        crate::motion::set_reduced(ctx, match self.settings.motion { MotionPref::Reduced => true, MotionPref::Full => false, MotionPref::System => system });
         for purpose in ui::snapshot::take(ctx) {
             self.apply_snapshot(purpose);
         }
@@ -1127,5 +1134,17 @@ impl eframe::App for TidemapApp {
         self.drive_shot_hooks();
         self.drive_screenshot(ctx);
         ui::snapshot::paint(ctx);
+        log_frame(ctx, frame);
+    }
+}
+
+/// With `TIDEMAP_FRAME_LOG=1`, prints `frame <ms>` (the CPU time of the previous frame) to
+/// stderr for every frame in which something animates, so motion cost can be measured.
+fn log_frame(ctx: &egui::Context, frame: &eframe::Frame) {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ENABLED.get_or_init(|| std::env::var_os("TIDEMAP_FRAME_LOG").is_some_and(|value| value == "1")) && crate::motion::busy(ctx) {
+        if let Some(seconds) = frame.info().cpu_usage {
+            eprintln!("frame {:.2}", seconds * 1000.0);
+        }
     }
 }
