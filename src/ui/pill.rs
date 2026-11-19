@@ -2,6 +2,7 @@
 
 use egui::{Align2, Area, Context, FontId, Id, Order, Pos2, Rect, Sense, Stroke, Ui, vec2};
 
+use super::controls;
 use crate::{
     app::{Dialog, TidemapApp},
     icons::{self, Icon},
@@ -121,16 +122,18 @@ fn row(
 fn zoom_label(ui: &mut Ui, p: Palette, text: &str, enabled: bool) -> egui::Response {
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, response) = ui.allocate_exact_size(vec2(ZOOM_LABEL_WIDTH, token::CONTROL), sense);
-    let hover = crate::motion::toggle(ui.ctx(), response.id.with("hover"), enabled && response.hovered(), crate::motion::FAST);
+    let hover = crate::motion::hover(ui.ctx(), response.id, enabled && response.hovered());
+    let press = crate::motion::press(ui.ctx(), response.id, enabled && response.is_pointer_button_down_on());
     if hover > 0.0 {
-        ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
+        let radius = token::RADIUS_CONTROL * controls::press_scale(press);
+        ui.painter().rect_filled(controls::pressed_rect(rect, press), radius, p.hover.gamma_multiply(hover));
     }
     let color = if enabled { p.ink } else { p.muted };
     ui.painter().text(
         rect.center(),
         Align2::CENTER_CENTER,
         text,
-        FontId::proportional(token::FONT_SMALL),
+        controls::pressed_font(FontId::proportional(token::FONT_SMALL), press),
         color,
     );
     if enabled {

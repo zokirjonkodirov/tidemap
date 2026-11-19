@@ -17,10 +17,32 @@ const BUTTON_HEIGHT: f32 = 32.0;
 const BUTTON_PAD: f32 = 16.0;
 const SWITCH_SIZE: egui::Vec2 = egui::vec2(36.0, 20.0);
 const KNOB_RADIUS: f32 = 8.0;
+/// Extra knob width at full press.
+const KNOB_SQUISH: f32 = 4.0;
 const SEGMENT_PAD: f32 = 2.0;
 const SEGMENT_HEIGHT: f32 = 28.0;
 const SEGMENT_TEXT_PAD: f32 = 16.0;
 const KEY_HEIGHT: f32 = 24.0;
+
+/// How much a fully pressed control shrinks: 4 % about its centre.
+pub const PRESS_DEPTH: f32 = 0.04;
+
+/// Scale of a control at press amount `press` (0 idle, 1 fully pressed). The release spring
+/// overshoots `press` slightly below 0, which reads as a small rebound above full size.
+pub fn press_scale(press: f32) -> f32 {
+    1.0 - PRESS_DEPTH * press
+}
+
+/// `rect` scaled about its centre for press amount `press`. Hit-testing and the focus ring
+/// keep using the unscaled rect.
+pub fn pressed_rect(rect: Rect, press: f32) -> Rect {
+    Rect::from_center_size(rect.center(), rect.size() * press_scale(press))
+}
+
+/// `font` with its size scaled for press amount `press`, so a label shrinks with its fill.
+pub fn pressed_font(font: FontId, press: f32) -> FontId {
+    FontId { size: font.size * press_scale(press), ..font }
+}
 
 fn medium() -> FontId {
     FontId::new(token::FONT_UI, theme::font_medium())
@@ -34,22 +56,22 @@ fn focus_ring(ui: &Ui, response: &Response, rect: Rect, radius: f32, p: Palette)
     }
 }
 
-/// A rounded text button. `fill` is painted always; `hover` eases in while hovered and a press
-/// sinks the label half a point.
+/// A rounded text button. `fill` is painted always; `hover` springs in while hovered and a
+/// press scales the fill and label down about the centre.
 fn text_button(ui: &mut Ui, text: &str, fill: Color32, hover: Color32, color: Color32) -> Response {
     let p = palette(ui);
     let enabled = ui.is_enabled();
-    let galley = ui.painter().layout_no_wrap(text.to_owned(), medium(), color);
-    let size = vec2(galley.size().x + 2.0 * BUTTON_PAD, BUTTON_HEIGHT);
+    let width = ui.painter().layout_no_wrap(text.to_owned(), medium(), color).size().x;
+    let size = vec2(width + 2.0 * BUTTON_PAD, BUTTON_HEIGHT);
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, response) = ui.allocate_exact_size(size, sense);
     let ctx = ui.ctx().clone();
-    let over = motion::toggle(&ctx, response.id.with("hover"), enabled && response.hovered(), motion::FAST);
-    let press = motion::toggle(&ctx, response.id.with("press"), enabled && response.is_pointer_button_down_on(), 0.08);
-    ui.painter().rect_filled(rect, token::RADIUS_CONTROL, fill.lerp_to_gamma(hover, over));
+    let over = motion::hover(&ctx, response.id, enabled && response.hovered());
+    let press = motion::press(&ctx, response.id, enabled && response.is_pointer_button_down_on());
+    let radius = token::RADIUS_CONTROL * press_scale(press);
+    ui.painter().rect_filled(pressed_rect(rect, press), radius, fill.lerp_to_gamma(hover, over));
     let color = if enabled { color } else { p.muted };
-    let pos = rect.center() - galley.size() * 0.5 + vec2(0.0, 0.5 * press);
-    ui.painter().galley(pos, galley, color);
+    ui.painter().text(rect.center(), Align2::CENTER_CENTER, text, pressed_font(medium(), press), color);
     focus_ring(ui, &response, rect, token::RADIUS_CONTROL, p);
     response
 }
@@ -74,7 +96,8 @@ pub fn danger_button(ui: &mut Ui, text: &str) -> Response {
     text_button(ui, text, Color32::TRANSPARENT, p.hover, p.danger)
 }
 
-/// A 36 x 20 pill switch with a 16 px knob. Returns true when toggled.
+/// A 36 x 20 pill switch with a 16 px knob that widens by 4 px while pressed. Returns true
+/// when toggled.
 pub fn switch(ui: &mut Ui, value: &mut bool) -> bool {
     let p = palette(ui);
     let (area, response) =
@@ -93,7 +116,9 @@ pub fn switch(ui: &mut Ui, value: &mut bool) -> bool {
     let travel = SWITCH_SIZE.x - SWITCH_SIZE.y;
     let knob = egui::pos2(track.left() + SWITCH_SIZE.y * 0.5 + travel * travel_t.clamp(-0.06, 1.06), track.center().y);
     let knob_color = p.knob_off.lerp_to_gamma(p.on_accent, on);
-    ui.painter().circle_filled(knob, KNOB_RADIUS, knob_color);
+    let press = motion::press(ui.ctx(), response.id, response.is_pointer_button_down_on());
+    let knob_size = vec2(2.0 * KNOB_RADIUS + KNOB_SQUISH * press, 2.0 * KNOB_RADIUS);
+    ui.painter().rect_filled(Rect::from_center_size(knob, knob_size), KNOB_RADIUS, knob_color);
     focus_ring(ui, &response, track, SWITCH_SIZE.y * 0.5, p);
     changed
 }
@@ -148,9 +173,14 @@ pub fn segmented<T: Copy + PartialEq>(
         );
         let response = ui.interact(rect, ui.id().with(("segment", index)), Sense::click());
         let selected = *value == *candidate;
-        let over = motion::toggle(ui.ctx(), response.id.with("hover"), response.hovered() && !selected, motion::FAST);
+        let over = motion::hover(ui.ctx(), response.id, response.hovered() && !selected);
+        let press = motion::press(ui.ctx(), response.id, response.is_pointer_button_down_on());
         if over > 0.0 {
-            ui.painter().rect_filled(rect, inner_radius, p.hover.gamma_multiply(over));
+            ui.painter().rect_filled(
+                pressed_rect(rect, press),
+                inner_radius * press_scale(press),
+                p.hover.gamma_multiply(over),
+            );
         }
         let (family, color) = if selected {
             (theme::font_medium(), p.ink)
@@ -161,7 +191,7 @@ pub fn segmented<T: Copy + PartialEq>(
             rect.center(),
             Align2::CENTER_CENTER,
             *label,
-            FontId::new(token::FONT_UI, family),
+            pressed_font(FontId::new(token::FONT_UI, family), press),
             color,
         );
         focus_ring(ui, &response, rect, inner_radius, p);
@@ -193,5 +223,16 @@ pub fn key_caps(ui: &mut Ui, shortcut: &str) {
     ui.spacing_mut().item_spacing.x = token::SPACE[0];
     for key in shortcut.split('+') {
         key_cap(ui, key);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn press_scale_spans_four_percent() {
+        assert_eq!(press_scale(0.0), 1.0);
+        assert!((press_scale(1.0) - 0.96).abs() < 1e-6);
     }
 }

@@ -58,7 +58,7 @@ fn logo(ui: &mut Ui, p: Palette) {
 /// A quiet list row: icon, name, and a muted detail on the right. Returns the row's response.
 fn list_row(ui: &mut Ui, p: Palette, icon: Icon, name: &str, detail: &str) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(LIST_WIDTH.min(ui.available_width()), LIST_ROW), Sense::click());
-    let hover = crate::motion::toggle(ui.ctx(), response.id.with("hover"), response.hovered(), crate::motion::FAST);
+    let hover = crate::motion::hover(ui.ctx(), response.id, response.hovered());
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
@@ -294,7 +294,7 @@ fn outline_row(ui: &mut Ui, p: Palette, text: &str, active: bool) -> bool {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), token::ROW_HEIGHT), Sense::click());
     let ctx = ui.ctx().clone();
     let on = crate::motion::toggle(&ctx, response.id.with("active"), active, crate::motion::BASE);
-    let hover = crate::motion::toggle(&ctx, response.id.with("hover"), response.hovered() && !active, crate::motion::FAST);
+    let hover = crate::motion::hover(&ctx, response.id, response.hovered() && !active);
     if on > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.accent_soft.gamma_multiply(on));
     }

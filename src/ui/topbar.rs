@@ -1,6 +1,6 @@
 //! The slim top bar: navigation on the left, the breadcrumb, quiet actions on the right.
 
-use egui::{Align, Color32, Context, FontId, Layout, Sense, UiBuilder, vec2};
+use egui::{Align, Color32, Context, FontId, Id, Layout, Sense, UiBuilder, vec2};
 use tidemap_model::Theme;
 
 use super::info;
@@ -181,7 +181,7 @@ fn project_crumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette) {
     let galley = ui.painter().layout_no_wrap(shown, font, p.secondary);
     let width = galley.size().x + 2.0 * BLOCK_PAD + 4.0 + CHEVRON;
     let (rect, response) = ui.allocate_exact_size(vec2(width, BLOCK_HEIGHT), Sense::click());
-    let hover = motion::toggle(ui.ctx(), response.id.with("hover"), response.hovered(), motion::FAST);
+    let hover = motion::hover(ui.ctx(), response.id, response.hovered());
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
@@ -238,7 +238,9 @@ fn breadcrumb(app: &mut TidemapApp, ui: &mut egui::Ui, p: Palette, open: &Open, 
     ui.label(egui::RichText::new(file).font(name_font).color(p.ink));
     if open.dirty {
         let (rect, _) = ui.allocate_exact_size(vec2(DOT, token::CONTROL), Sense::hover());
-        ui.painter().circle_filled(rect.center(), DOT * 0.5, p.accent);
+        // Pops in the first time the file turns dirty.
+        let pop = motion::spring_from(ui.ctx(), Id::new("crumb-dirty-dot"), 0.0, 1.0, motion::POP);
+        ui.painter().circle_filled(rect.center(), DOT * 0.5 * pop.max(0.0), p.accent);
     }
     if let Some(label) = block_label {
         ui.label(egui::RichText::new("·").font(small.clone()).color(p.muted));
@@ -259,7 +261,7 @@ fn block_button(
     let width = galley.size().x + 2.0 * BLOCK_PAD + ui.spacing().item_spacing.x + CHEVRON;
     let (rect, response) = ui.allocate_exact_size(vec2(width, BLOCK_HEIGHT), Sense::click());
     let popup_open = egui::Popup::is_id_open(ui.ctx(), response.id.with("popup"));
-    let hover = motion::toggle(ui.ctx(), response.id.with("hover"), response.hovered() || popup_open, motion::FAST);
+    let hover = motion::hover(ui.ctx(), response.id, response.hovered() || popup_open);
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }

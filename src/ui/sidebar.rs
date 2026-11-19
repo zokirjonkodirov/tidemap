@@ -11,6 +11,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use egui::{Context, EventFilter, FontId, Id, Key, Modifiers, Rect, Sense, Ui, UiBuilder, text::LayoutJob, vec2};
 use tidemap_model::FileEntry;
 
+use super::controls;
 use super::tree::{self, TreeCache, TreeRow};
 use crate::{
     app::TidemapApp,
@@ -389,7 +390,7 @@ fn header(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let name = app.workspace.as_ref().map(|workspace| workspace.name.clone()).unwrap_or_default();
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_HEIGHT), Sense::click());
     let open = app.palette_open && app.palette_mode == super::palette::PaletteMode::Projects;
-    let hover = motion::toggle(ui.ctx(), response.id.with("hover"), response.hovered() || open, motion::FAST);
+    let hover = motion::hover(ui.ctx(), response.id, response.hovered() || open);
     let painter = ui.painter();
     if hover > 0.0 {
         painter.rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
@@ -427,7 +428,7 @@ fn search_field(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
     }
     let focused = ctx.memory(|memory| memory.has_focus(id));
     let focus = motion::toggle(ctx, id.with("focus-ring"), focused, motion::FAST);
-    let hover = motion::toggle(ctx, id.with("hover"), field.hovered() && !focused, motion::FAST);
+    let hover = motion::hover(ctx, id, field.hovered() && !focused);
     ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.app);
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover * 0.6));
@@ -470,7 +471,7 @@ fn search_field(app: &mut TidemapApp, ui: &mut Ui, ctx: &Context, p: Palette) {
     let clear = motion::toggle(ctx, id.with("clear"), has_text, motion::BASE);
     if clear > 0.0 {
         let response = ui.interact(slot, id.with("clear-hit"), if has_text { Sense::click() } else { Sense::hover() });
-        let over = motion::toggle(ctx, id.with("clear-hover"), response.hovered() && has_text, motion::FAST);
+        let over = motion::hover(ctx, id.with("clear-hover"), response.hovered() && has_text);
         ui.painter().rect_filled(slot, 6.0, p.hover.gamma_multiply(over * clear));
         let glyph = Rect::from_center_size(slot.center(), vec2(12.0, 12.0));
         icons::paint(ui.painter(), Icon::Close, glyph, p.muted.lerp_to_gamma(p.ink, over).gamma_multiply(clear));
@@ -703,7 +704,7 @@ fn empty_state(app: &mut TidemapApp, ui: &mut Ui, p: Palette, indexing: bool, se
     );
     if !indexing && !searching {
         ui.add_space(token::SPACE[1]);
-        if ui.button("Open another folder").clicked() {
+        if controls::quiet_button(ui, "Open another folder").clicked() {
             app.open_folder(None);
         }
     }
@@ -734,7 +735,7 @@ fn file_or_folder_row(
     if height >= 0.5 && ui.is_rect_visible(rect) {
         let ctx = ui.ctx().clone();
         let row_id = Id::new(("tree-row", look.active_fill, &row.path));
-        let hover = motion::toggle(&ctx, row_id.with("hover"), response.hovered() && !active && !moving, motion::FAST);
+        let hover = motion::hover(&ctx, row_id, response.hovered() && !active && !moving);
         let mut painter = ui.painter().clone();
         painter.set_clip_rect(painter.clip_rect().intersect(rect));
         if moving {

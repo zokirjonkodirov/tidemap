@@ -1031,7 +1031,7 @@ impl DocView {
         self.scrollbar(&ctx, ui, &painter, rect, view_h, max_scroll, p, now);
 
         self.find_bar(&ctx, rect, p);
-        let shown = motion::toggle(&ctx, Id::new("link-chip"), self.hover_url.is_some(), motion::FAST);
+        let shown = motion::hover(&ctx, Id::new("link-chip"), self.hover_url.is_some());
         if shown > 0.01 {
             let url = self.hover_url.clone().or_else(|| self.last_url.clone()).unwrap_or_default();
             self.last_url = Some(url.clone());
@@ -1140,7 +1140,7 @@ impl DocView {
                 }
                 paint_selection(&clipped, galley, at, selection, selection_color(p, input.dark));
                 clipped.galley(at, galley.clone(), p.ink);
-                let alpha = motion::toggle(ctx, Id::new(("code-chip", index)), hot, motion::FAST);
+                let alpha = motion::hover(ctx, Id::new(("code-chip", index)), hot);
                 if overflow > 0.0 {
                     // A thin sideways scrollbar that shows while the pointer is over the block.
                     let track = Rect::from_min_max(pos2(view.left(), boxr.bottom() - 6.0), pos2(view.right(), boxr.bottom() - 3.0));
@@ -1328,7 +1328,7 @@ impl DocView {
         let canvas = Color32::from_rgba_unmultiplied(colors.canvas[0], colors.canvas[1], colors.canvas[2], colors.canvas[3]);
         let boxr = area;
         let hover = ctx.pointer_hover_pos().is_some_and(|pos| boxr.contains(pos) && painter.clip_rect().contains(pos));
-        let lift = motion::toggle(ctx, Id::new(("diagram-hover", leaf.hash)), hover, motion::FAST);
+        let lift = motion::hover(ctx, Id::new(("diagram-hover", leaf.hash)), hover);
         painter.rect_filled(boxr, 10.0, p.panel);
         painter.rect_filled(boxr, 10.0, canvas);
         let ring = if active { p.accent } else { theme::alpha(p.ink, 20 + (lift * 30.0) as u8) };

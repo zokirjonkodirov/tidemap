@@ -9,7 +9,7 @@ use std::f32::consts::{PI, TAU};
 
 use eframe::egui;
 
-use crate::motion;
+use crate::{motion, ui::controls};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Icon {
@@ -439,7 +439,7 @@ pub fn paint_rotated(painter: &egui::Painter, icon: Icon, rect: egui::Rect, colo
 }
 
 /// A 32x32 icon button with a 16 px glyph. Idle glyphs are quieter than text; hover eases
-/// the fill and the glyph to full strength, a press sinks the glyph a touch.
+/// the fill and the glyph to full strength, a press scales the fill and glyph down.
 pub fn button(
     ui: &mut egui::Ui,
     icon: Icon,
@@ -454,24 +454,24 @@ pub fn button(
         let ctx = ui.ctx().clone();
         let hovered = enabled && response.hovered();
         let pressed = enabled && response.is_pointer_button_down_on();
-        let hover = motion::toggle(&ctx, response.id.with("hover"), hovered, motion::FAST);
+        let hover = motion::hover(&ctx, response.id, hovered);
         let on = motion::toggle(&ctx, response.id.with("selected"), selected, motion::BASE);
-        let press = motion::toggle(&ctx, response.id.with("press"), pressed, 0.08);
+        let press = motion::press(&ctx, response.id, pressed);
+        let body = controls::pressed_rect(rect, press);
         let painter = ui.painter();
         if on > 0.0 {
-            painter.rect_filled(rect, 8.0, p.accent_soft.gamma_multiply(on));
+            painter.rect_filled(body, 8.0 * controls::press_scale(press), p.accent_soft.gamma_multiply(on));
         }
         if hover > 0.0 {
-            painter.rect_filled(rect, 8.0, p.hover.gamma_multiply(hover * (1.0 + 0.8 * press)));
+            painter.rect_filled(body, 8.0 * controls::press_scale(press), p.hover.gamma_multiply(hover * (1.0 + 0.8 * press.max(0.0))));
         }
         let glyph = if !enabled {
             p.muted.gamma_multiply(0.55)
         } else {
             p.secondary.lerp_to_gamma(p.ink, hover).lerp_to_gamma(p.accent, on)
         };
-        let size = 16.0 * (1.0 - 0.08 * press);
-        let centre = rect.center() + egui::vec2(0.0, 0.5 * press);
-        paint(painter, icon, egui::Rect::from_center_size(centre, egui::vec2(size, size)), glyph);
+        let size = 16.0 * controls::press_scale(press);
+        paint(painter, icon, egui::Rect::from_center_size(rect.center(), egui::vec2(size, size)), glyph);
     }
     let response = response.on_hover_text(tooltip);
     if enabled {

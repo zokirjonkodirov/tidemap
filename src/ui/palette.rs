@@ -700,7 +700,7 @@ fn result_row(ui: &mut Ui, p: Palette, hit: &Hit, selected: bool) -> egui::Respo
         egui::pos2(area.left() + inset, area.top()),
         egui::pos2(area.right() - inset, area.bottom()),
     );
-    let hover = motion::toggle(ui.ctx(), response.id.with("hover"), response.hovered() && !selected, motion::FAST);
+    let hover = motion::hover(ui.ctx(), response.id, response.hovered() && !selected);
     if hover > 0.0 {
         ui.painter().rect_filled(rect, token::RADIUS_CONTROL, p.hover.gamma_multiply(hover));
     }
