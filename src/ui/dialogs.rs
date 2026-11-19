@@ -34,9 +34,9 @@ pub fn initial_theme(settings_file_existed: bool, stored: Theme) -> Theme {
     }
 }
 
-/// The floating surface of a dialog: radius 16, 24 px padding.
-pub fn dialog_frame(p: Palette) -> Frame {
-    theme::floating(p, token::RADIUS_DIALOG).inner_margin(Margin::same(DIALOG_PADDING))
+/// The surface of a dialog: `Modal` elevation, radius 16, 24 px padding.
+pub fn dialog_surface<R>(ui: &mut Ui, p: Palette, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    theme::elevated(ui, p, theme::Level::Modal, token::RADIUS_DIALOG, Margin::same(DIALOG_PADDING), add)
 }
 
 /// Shows whichever dialogs are open.
@@ -92,7 +92,7 @@ fn show_modal<R>(ctx: &Context, id: &'static str, p: Palette, add: impl FnOnce(&
         .backdrop_color(p.scrim.gamma_multiply(t))
         .show(ctx, |ui| {
             ui.multiply_opacity(t);
-            dialog_frame(p).show(ui, add).inner
+            dialog_surface(ui, p, add).inner
         })
 }
 

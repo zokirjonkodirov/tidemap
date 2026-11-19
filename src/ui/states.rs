@@ -186,9 +186,8 @@ pub fn search_overlay(app: &mut TidemapApp, ctx: &Context, canvas: Rect, p: Pale
         .pivot(Align2::CENTER_TOP)
         .fixed_pos(pos2(canvas.center().x, canvas.top() + SEARCH_TOP))
         .show(ctx, |ui| {
-            theme::floating(p, token::RADIUS_PILL)
-                .inner_margin(Margin::symmetric(token::SPACE[2] as i8, token::SPACE[0] as i8))
-                .show(ui, |ui| {
+            let margin = Margin::symmetric(token::SPACE[2] as i8, token::SPACE[0] as i8);
+            theme::elevated(ui, p, theme::Level::Raised, token::RADIUS_PILL, margin, |ui| {
                     ui.spacing_mut().item_spacing.x = token::SPACE[1];
                     ui.horizontal(|ui| {
                         let (icon, _) = ui.allocate_exact_size(vec2(16.0, token::CONTROL), Sense::hover());

@@ -72,16 +72,15 @@ pub fn show_pill(app: &mut TidemapApp, ctx: &Context, canvas: Rect, p: Palette) 
         .pivot(Align2::CENTER_BOTTOM)
         .fixed_pos(position)
         .show(ctx, |ui| {
-            theme::floating(p, token::RADIUS_PILL)
-                .inner_margin(egui::Margin::same(PADDING as i8))
-                .show(ui, |ui| {
-                    ui.set_width(content_width());
-                    ui.set_height(HEIGHT - 2.0 * PADDING);
-                    ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
-                    ui.horizontal_centered(|ui| {
-                        row(app, ui, p, has_preview, has_block, export_unavailable);
-                    });
+            let margin = egui::Margin::same(PADDING as i8);
+            theme::elevated(ui, p, theme::Level::Raised, token::RADIUS_PILL, margin, |ui| {
+                ui.set_width(content_width());
+                ui.set_height(HEIGHT - 2.0 * PADDING);
+                ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
+                ui.horizontal_centered(|ui| {
+                    row(app, ui, p, has_preview, has_block, export_unavailable);
                 });
+            });
         });
 }
 

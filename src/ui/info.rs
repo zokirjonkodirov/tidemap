@@ -367,9 +367,9 @@ pub fn show(app: &mut TidemapApp, ctx: &Context, anchor: Rect, p: Palette) {
         ))
         .show(ctx, |ui| {
             ui.multiply_opacity(t);
-            theme::floating(p, token::RADIUS_PANEL)
-                .inner_margin(Margin::same(PADDING))
-                .show(ui, |ui| contents(ui, p, &facts, &mut actions));
+            theme::elevated(ui, p, theme::Level::Overlay, token::RADIUS_PANEL, Margin::same(PADDING), |ui| {
+                contents(ui, p, &facts, &mut actions)
+            });
         });
     let clicked_outside = ctx.input(|input| {
         input.pointer.any_click()
@@ -406,14 +406,11 @@ pub fn toast(app: &TidemapApp, ctx: &Context, canvas: Rect, p: Palette) {
         .interactable(false)
         .show(ctx, |ui| {
             ui.multiply_opacity(t);
-            theme::floating(p, token::RADIUS_PANEL)
-                .inner_margin(Margin::symmetric(PADDING, token::SPACE[2] as i8))
-                .show(ui, |ui| {
-                    ui.set_max_width(TOAST_WIDTH);
-                    ui.add(
-                        egui::Label::new(RichText::new(text).size(token::FONT_UI).color(p.ink)).wrap(),
-                    );
-                });
+            let margin = Margin::symmetric(PADDING, token::SPACE[2] as i8);
+            theme::elevated(ui, p, theme::Level::Raised, token::RADIUS_PANEL, margin, |ui| {
+                ui.set_max_width(TOAST_WIDTH);
+                ui.add(egui::Label::new(RichText::new(text).size(token::FONT_UI).color(p.ink)).wrap());
+            });
         });
     ctx.request_repaint_after(crate::app::TOAST_LIFETIME.saturating_sub(shown.elapsed()));
 }

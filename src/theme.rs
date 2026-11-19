@@ -4,7 +4,8 @@
 //! diagram style sheet owns diagram styling; this module owns spacing, radii,
 //! type, elevation and the one-accent palette used by the native UI.
 use egui::{
-    Color32, Context, CornerRadius, FontFamily, Frame, Margin, RichText, Shadow, Stroke, Visuals, vec2,
+    Color32, Context, CornerRadius, FontFamily, Frame, InnerResponse, Margin, Painter, Rect, RichText,
+    Shadow, Shape, Stroke, StrokeKind, Ui, Visuals, vec2,
 };
 use tidemap_model::Theme;
 
@@ -42,6 +43,8 @@ pub mod token {
 
 #[derive(Clone, Copy)]
 pub struct Palette {
+    /// True for the dark palette.
+    pub dark: bool,
     pub app: Color32,
     pub panel: Color32,
     pub hover: Color32,
@@ -53,7 +56,6 @@ pub struct Palette {
     pub accent_soft: Color32,
     pub on_accent: Color32,
     pub danger: Color32,
-    pub shadow: Color32,
     /// Backdrop behind dialogs and the palette.
     pub scrim: Color32,
     /// The selected segment of a segmented control.
@@ -100,18 +102,18 @@ pub fn palette(dark: bool) -> Palette {
     if dark {
         let app = rgb(0x1B, 0x1D, 0x20);
         Palette {
+            dark: true,
             app,
             panel: rgb(0x24, 0x27, 0x2B),
             hover: alpha(rgb(255, 255, 255), 15),
             ink: rgb(0xE6, 0xE8, 0xEB),
             secondary: rgb(0xA9, 0xB0, 0xBA),
-            muted: rgb(0x90, 0x99, 0xA4),
+            muted: rgb(0x98, 0xA1, 0xAC),
             hairline: alpha(rgb(255, 255, 255), 20),
             accent: rgb(0x8F, 0xAE, 0xE0),
             accent_soft: rgb(0x2A, 0x34, 0x47),
             on_accent: rgb(0x14, 0x18, 0x1C),
             danger: rgb(0xE1, 0x9A, 0x9A),
-            shadow: alpha(rgb(0x14, 0x18, 0x1C), 128),
             scrim: alpha(rgb(0x00, 0x00, 0x00), 110),
             raised: rgb(0x3A, 0x3E, 0x44),
             field: rgb(0x1B, 0x1D, 0x20),
@@ -122,6 +124,7 @@ pub fn palette(dark: bool) -> Palette {
         let ink = rgb(0x1F, 0x23, 0x28);
         let app = rgb(0xFA, 0xFA, 0xF8);
         Palette {
+            dark: false,
             app,
             panel: rgb(0xFF, 0xFF, 0xFF),
             hover: alpha(ink, 13),
@@ -133,7 +136,6 @@ pub fn palette(dark: bool) -> Palette {
             accent_soft: rgb(0xE9, 0xEE, 0xF7),
             on_accent: rgb(0xFF, 0xFF, 0xFF),
             danger: rgb(0xA2, 0x3B, 0x3B),
-            shadow: alpha(rgb(0x14, 0x18, 0x1C), 36),
             scrim: alpha(ink, 31),
             raised: rgb(0xFF, 0xFF, 0xFF),
             field: rgb(0xEC, 0xEE, 0xF1),
@@ -151,9 +153,135 @@ pub fn font_semibold() -> FontFamily {
     FontFamily::Name("inter-semibold".into())
 }
 
-/// The one shadow, used by floating surfaces only.
-fn floating_shadow(p: Palette) -> Shadow {
-    Shadow { offset: [0, 8], blur: 24, spread: 0, color: p.shadow }
+/// How high a surface sits above the backdrop. Each level has its own fill, shadows and edge.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Level {
+    /// Sidebar, source and outline cards.
+    Card,
+    /// Pill, toast, minimap and other small floating controls.
+    Raised,
+    /// Popovers, menus and tooltips.
+    Overlay,
+    /// The command palette and dialogs.
+    Modal,
+}
+
+/// Everything needed to paint a surface at one [`Level`].
+#[derive(Clone, Copy)]
+pub struct Elevation {
+    /// Surface fill.
+    pub fill: Color32,
+    /// Tight shadow that anchors the surface to what is under it.
+    pub contact: Shadow,
+    /// Wide shadow that says how high the surface floats.
+    pub key: Shadow,
+    /// 1 px edge drawn inside the surface.
+    pub edge: Stroke,
+    /// Light line along the top edge (dark mode only; transparent in light mode).
+    pub highlight: Color32,
+}
+
+/// `pct` percent opacity as an alpha byte.
+fn percent(pct: u8) -> u8 {
+    (255.0 * f32::from(pct) / 100.0).round() as u8
+}
+
+/// A shadow dropped straight down by `y`, tinted `color` at `pct` percent.
+fn drop_shadow(y: i8, blur: u8, color: Color32, pct: u8) -> Shadow {
+    Shadow { offset: [0, y], blur, spread: 0, color: alpha(color, percent(pct)) }
+}
+
+/// The fill, shadows, edge and highlight of `level` in palette `p`.
+pub fn elevation(p: Palette, level: Level) -> Elevation {
+    // Per level: contact (y, blur, %), key (y, blur, %), edge %, highlight %.
+    let (contact, key, edge, highlight) = match (p.dark, level) {
+        (false, Level::Card) => ((1, 2, 5), (2, 8, 4), 6, 0),
+        (false, Level::Raised) => ((1, 3, 8), (6, 16, 8), 7, 0),
+        (false, Level::Overlay) => ((1, 3, 8), (12, 32, 12), 8, 0),
+        (false, Level::Modal) => ((2, 6, 8), (24, 56, 18), 8, 0),
+        (true, Level::Card) => ((1, 2, 30), (4, 12, 20), 6, 4),
+        (true, Level::Raised) => ((1, 2, 40), (8, 20, 30), 8, 6),
+        (true, Level::Overlay) => ((1, 3, 45), (12, 32, 40), 9, 7),
+        (true, Level::Modal) => ((2, 6, 50), (24, 56, 50), 10, 8),
+    };
+    let (shade, edge_tint) = if p.dark { (Color32::BLACK, Color32::WHITE) } else { (p.ink, p.ink) };
+    let fill = match (p.dark, level) {
+        (false, _) => p.panel,
+        (true, Level::Card) => rgb(0x24, 0x27, 0x2B),
+        (true, Level::Raised) => rgb(0x2A, 0x2D, 0x32),
+        (true, Level::Overlay) => rgb(0x2D, 0x31, 0x36),
+        (true, Level::Modal) => rgb(0x30, 0x34, 0x39),
+    };
+    Elevation {
+        fill,
+        contact: drop_shadow(contact.0, contact.1, shade, contact.2),
+        key: drop_shadow(key.0, key.1, shade, key.2),
+        edge: Stroke::new(1.0_f32, alpha(edge_tint, percent(edge))),
+        highlight: alpha(Color32::WHITE, percent(highlight)),
+    }
+}
+
+/// The two shadows of `e` around a surface covering `rect`, widest first.
+fn shadow_shapes(e: &Elevation, rect: Rect, radius: f32) -> Vec<Shape> {
+    [e.key, e.contact].iter().map(|s| Shape::Rect(s.as_shape(rect, radius))).collect()
+}
+
+/// The 1 px top highlight, inset by the corner radius so it stays on the straight edge.
+fn paint_highlight(painter: &Painter, rect: Rect, radius: f32, e: &Elevation) {
+    if e.highlight == Color32::TRANSPARENT {
+        return;
+    }
+    let inset = radius.min(rect.width() * 0.5);
+    painter.hline(rect.left() + inset..=rect.right() - inset, rect.top() + 0.5, Stroke::new(1.0_f32, e.highlight));
+}
+
+/// Paints a surface covering `rect` at elevation `e` straight onto `painter`: shadows, fill,
+/// edge, then highlight. For surfaces that are not laid out as a [`Frame`], such as the minimap.
+pub fn paint_elevation(painter: &Painter, rect: Rect, radius: f32, e: &Elevation) {
+    for shape in shadow_shapes(e, rect, radius) {
+        painter.add(shape);
+    }
+    painter.rect(rect, radius, e.fill, e.edge, StrokeKind::Inside);
+    paint_highlight(painter, rect, radius, e);
+}
+
+/// Shows `add` on a surface at `level`: shadows under a filled, edged frame, with the highlight
+/// on top. The shadow slot is reserved before the frame so it paints beneath it.
+pub fn elevated<R>(
+    ui: &mut Ui,
+    p: Palette,
+    level: Level,
+    radius: f32,
+    margin: Margin,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
+    let e = elevation(p, level);
+    let slot = ui.painter().add(Shape::Noop);
+    let inner = Frame::new()
+        .fill(e.fill)
+        .stroke(e.edge)
+        .corner_radius(radius)
+        .inner_margin(margin)
+        .show(ui, add);
+    let rect = inner.response.rect;
+    ui.painter().set(slot, Shape::Vec(shadow_shapes(&e, rect, radius)));
+    paint_highlight(ui.painter(), rect, radius, &e);
+    inner
+}
+
+/// WCAG 2.x contrast ratio between two colours (1 to 21). Alpha is ignored; composite with
+/// [`over`] first.
+#[cfg(test)]
+pub fn contrast(a: Color32, b: Color32) -> f32 {
+    fn luminance(c: Color32) -> f32 {
+        let lin = |v: u8| {
+            let v = f32::from(v) / 255.0;
+            if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
+    }
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
 fn widget(visuals: &mut Visuals, p: Palette) {
@@ -201,11 +329,12 @@ pub fn apply(ctx: &Context, theme: Theme) -> bool {
     let mut visuals = if dark { Visuals::dark() } else { Visuals::light() };
     visuals.panel_fill = p.app;
     visuals.window_fill = p.panel;
-    visuals.window_stroke = Stroke::NONE;
+    let overlay = elevation(p, Level::Overlay);
+    visuals.window_stroke = overlay.edge;
     visuals.window_corner_radius = CornerRadius::same(token::RADIUS_DIALOG as u8);
     visuals.menu_corner_radius = CornerRadius::same(token::RADIUS_PANEL as u8);
-    visuals.window_shadow = floating_shadow(p);
-    visuals.popup_shadow = floating_shadow(p);
+    visuals.window_shadow = overlay.key;
+    visuals.popup_shadow = overlay.key;
     visuals.extreme_bg_color = p.app;
     visuals.text_edit_bg_color = Some(p.app);
     visuals.faint_bg_color = p.hover;
@@ -239,21 +368,60 @@ pub fn apply(ctx: &Context, theme: Theme) -> bool {
     dark
 }
 
-/// Floating surface: panel fill, the one shadow, no stroke.
-pub fn floating(p: Palette, radius: f32) -> Frame {
-    Frame::new()
-        .fill(p.panel)
-        .corner_radius(radius)
-        .inner_margin(Margin::symmetric(token::SPACE[2] as i8, token::SPACE[1] as i8))
-        .shadow(floating_shadow(p))
-}
-
-/// Inset surface: panel fill, `RADIUS_PANEL`, no stroke, no shadow.
-pub fn inset_panel(p: Palette) -> Frame {
-    Frame::new().fill(p.panel).corner_radius(token::RADIUS_PANEL).inner_margin(token::SPACE[3])
-}
-
 /// Consistent secondary line used under headings and in footers.
 pub fn caption(ui: &mut egui::Ui, p: Palette, text: impl ToString) {
     ui.label(RichText::new(text.to_string()).size(token::FONT_SMALL).color(p.muted));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn elevation_rises_with_level() {
+        for dark in [false, true] {
+            let p = palette(dark);
+            let levels = [Level::Card, Level::Raised, Level::Overlay, Level::Modal];
+            for pair in levels.windows(2) {
+                let (a, b) = (elevation(p, pair[0]), elevation(p, pair[1]));
+                assert!(b.key.blur > a.key.blur);
+                assert!(b.key.offset[1] >= a.key.offset[1]);
+            }
+        }
+    }
+
+    #[test]
+    fn dark_surfaces_lighten_with_level() {
+        let p = palette(true);
+        let fills: Vec<f32> = [Level::Card, Level::Raised, Level::Overlay, Level::Modal]
+            .iter()
+            .map(|l| contrast(elevation(p, *l).fill, Color32::BLACK))
+            .collect();
+        assert!(fills.windows(2).all(|w| w[1] > w[0]));
+    }
+
+    #[test]
+    fn dark_edges_separate_from_backdrop() {
+        let p = palette(true);
+        for (level, floor) in [(Level::Card, 1.25), (Level::Overlay, 1.4), (Level::Modal, 1.4)] {
+            let e = elevation(p, level);
+            assert!(contrast(over(e.edge.color, e.fill), p.app) >= floor, "{level:?}");
+        }
+    }
+
+    #[test]
+    fn text_contrast_holds_on_every_fill() {
+        for dark in [false, true] {
+            let p = palette(dark);
+            for level in [Level::Card, Level::Raised, Level::Overlay, Level::Modal] {
+                assert!(contrast(p.muted, elevation(p, level).fill) >= 4.5);
+            }
+        }
+    }
+
+    #[test]
+    fn contrast_matches_wcag_extremes() {
+        assert!((contrast(Color32::WHITE, Color32::BLACK) - 21.0).abs() < 0.01);
+        assert!((contrast(Color32::WHITE, Color32::WHITE) - 1.0).abs() < 1e-4);
+    }
 }

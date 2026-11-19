@@ -154,15 +154,14 @@ pub fn frame(app: &mut TidemapApp, ctx: &Context) {
 
 /// A rounded white card with the standard padding. `margin` is the backdrop gap around it.
 fn card(ui: &mut Ui, p: Palette, margin: Margin, add_contents: impl FnOnce(&mut Ui)) {
-    theme::inset_panel(p)
-        .inner_margin(Margin::same(12))
-        .outer_margin(margin)
-        .show(ui, |ui| {
+    Frame::NONE.outer_margin(margin).show(ui, |ui| {
+        theme::elevated(ui, p, theme::Level::Card, token::RADIUS_PANEL, Margin::same(12), |ui| {
             ui.set_min_size(ui.available_size());
             // Nothing may paint outside the rounded card.
             ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
             add_contents(ui);
         });
+    });
 }
 
 /// Draws a hairline and sets the resize cursor while the strip is hovered or dragged.

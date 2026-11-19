@@ -459,7 +459,7 @@ impl DocView {
         };
         egui::Area::new(Id::new("page-find-bar")).order(Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
             ui.multiply_opacity(shown);
-            theme::floating(p, 12.0).inner_margin(Margin::symmetric(10, 4)).show(ui, |ui| {
+            theme::elevated(ui, p, theme::Level::Raised, 12.0, Margin::symmetric(10, 4), |ui| {
                 ui.set_width(width - 20.0);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;

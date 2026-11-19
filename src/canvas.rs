@@ -702,8 +702,11 @@ impl DiagramCanvas {
             let rise = 6.0 * (1.0 - hint);
             let bottom = viewport.center_bottom() - Vec2::new(0.0, 76.0 - rise);
             let pill = egui::Rect::from_center_size(bottom - Vec2::new(0.0, size.y * 0.5), size);
-            painter.rect_filled(pill, size.y * 0.5, p.field.gamma_multiply(0.92 * hint));
-            painter.galley(pill.center() - galley.size() * 0.5, galley, p.secondary);
+            let mut hint_painter = painter.clone();
+            hint_painter.multiply_opacity(hint);
+            let e = theme::elevation(p, theme::Level::Raised);
+            theme::paint_elevation(&hint_painter, pill, size.y * 0.5, &e);
+            hint_painter.galley(pill.center() - galley.size() * 0.5, galley, p.secondary);
         }
         if let Some(rect) = minimap_rect {
             self.paint_minimap(ui, &painter, viewport, rect, scene, style, dark, p);
@@ -726,8 +729,9 @@ impl DiagramCanvas {
         dark: bool,
         p: Palette,
     ) {
+        let e = theme::elevation(p, theme::Level::Raised);
+        theme::paint_elevation(painter, panel, token::RADIUS_PANEL, &e);
         let painter = painter.with_clip_rect(panel.intersect(viewport));
-        painter.rect_filled(panel, token::RADIUS_PANEL, p.panel);
         let bounds = scene.bounds;
         let scale = ((panel.width() - 14.0) / bounds.w.max(1.0))
             .min((panel.height() - 14.0) / bounds.h.max(1.0));
@@ -808,9 +812,8 @@ pub fn paint_card(
         .pivot(Align2::CENTER_CENTER)
         .fixed_pos(viewport.center())
         .show(ui.ctx(), |ui| {
-            theme::floating(p, token::RADIUS_DIALOG)
-                .inner_margin(token::SPACE[4])
-                .show(ui, |ui| {
+            let margin = egui::Margin::same(token::SPACE[4] as i8);
+            theme::elevated(ui, p, theme::Level::Overlay, token::RADIUS_DIALOG, margin, |ui| {
                     ui.set_max_width(((viewport.width() - 80.0).clamp(160.0, 400.0)).max(160.0));
                     ui.label(
                         egui::RichText::new(title)

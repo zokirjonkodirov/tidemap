@@ -4,7 +4,7 @@ Last updated 18 November 2026. The authoritative design is [`superpowers/specs/2
 
 ## 1. Character
 
-A quiet reading instrument. The diagram is the largest and strongest thing on screen. The shell is an inset, rounded set of cards on an off-white backdrop (near-black in dark mode), with one blue accent, hairline borders only on hover or drag, and one soft shadow for floating surfaces. Icons are painted vectors (`src/icons.rs`); no emoji or text glyphs are used as icons in the redesigned shell.
+A quiet reading instrument. The diagram is the largest and strongest thing on screen. The shell is an inset, rounded set of cards on an off-white backdrop (near-black in dark mode), with one blue accent. Surfaces rise through four elevation levels (a fill, a contact shadow, a key shadow, a 1 px edge and, in dark mode, a 1 px top highlight); resize hairlines show only on hover or drag. Icons are painted vectors (`src/icons.rs`); no emoji or text glyphs are used as icons in the redesigned shell.
 
 The Miro reference informed spacing, clear routing, shape diversity and readable role colours. Its toolbars, collaboration chrome, branding and node palette are not reproduced.
 
@@ -23,13 +23,12 @@ Values below were read from `src/theme.rs` and `crates/diagram/src/style.rs` on 
 | `hover` | ink `#1F2328` at alpha 13 | white at alpha 15 | Row and button hover |
 | `ink` | `#1F2328` | `#E6E8EB` | Primary text |
 | `secondary` | `#5F6672` | `#A9B0BA` | Supporting text |
-| `muted` | `#6B7280` | `#9099A4` | Hints, counts |
+| `muted` | `#6B7280` | `#98A1AC` | Hints, counts |
 | `hairline` | ink at alpha 20 | white at alpha 20 | Divider shown on hover or drag |
 | `accent` | `#41609E` | `#8FAEE0` | Selection, primary actions, focus ring |
 | `accent_soft` | `#E9EEF7` | `#2A3447` | Active row, pressed controls |
 | `on_accent` | `#FFFFFF` | `#14181C` | Text on accent |
 | `danger` | `#A23B3B` | `#E19A9A` | Errors |
-| `shadow` | `#14181C` at alpha 36 | `#14181C` at alpha 128 | The one floating shadow (offset 0,8, blur 24) |
 
 Contrast measured in the tokens report (WCAG): all text pairs are at least 4.5:1; the lowest is light `muted` on `app` at 4.63. Widgets draw no strokes; the only stroke is a 2 px accent keyboard focus ring.
 
@@ -81,11 +80,24 @@ Diagram defaults: edge width 1.5, arrow size 7, node stroke 1, cluster tint 0.35
 | Fonts | Inter Regular (UI), Inter Medium (node labels), Inter SemiBold (cluster titles, emphasis), IBM Plex Mono (source). Bundled in `assets/fonts` under the OFL |
 | Heights | bar 40, row 32, control 32 px |
 | Widths | sidebar 260 (220 to 360), source 420 (min 280), inset 8 px |
-| Motion | 0.16 s ease; narrow-window breakpoint 1000 px |
+| Motion | Velocity-preserving springs (`src/motion.rs`): SNAP 0.16 s, SOFT 0.30 s, GLIDE 0.38 s, POP 0.34 s with a small overshoot; narrow-window breakpoint 1000 px |
 
 `src/theme.rs` still holds a block of legacy tokens (`FONT_DISPLAY`, `HEIGHT_TOOLBAR`, `WIDTH_SEGMENT`, `GUTTER_TOP`, `GUTTER_PANEL`) used by dialogs, the welcome screen and the info popover until those are restyled.
 
-Not used: gradients, glass blur, decorative glows, a dot grid, per-node shadows.
+### Elevation (`src/theme.rs`, `Level`, `elevation`, `elevated`)
+
+Each level has a fill, a contact shadow, a key shadow, a 1 px edge drawn inside the shape and, in dark mode only, a 1 px top highlight inset by the corner radius. Shadow notation is `x, y, blur colour alpha`.
+
+| Level | Used by | Light | Dark |
+|---|---|---|---|
+| `Card` | sidebar, source, outline cards | fill `panel`; 0,1,2 ink 5%; 0,2,8 ink 4%; edge ink 6% | fill `#24272B`; 0,1,2 black 30%; 0,4,12 black 20%; edge white 6%; highlight white 4% |
+| `Raised` | pill, toast, minimap, LOD hint, search | fill `panel`; 0,1,3 ink 8%; 0,6,16 ink 8%; edge ink 7% | fill `#2A2D32`; 0,1,2 black 40%; 0,8,20 black 30%; edge white 8%; highlight white 6% |
+| `Overlay` | popovers, menus, tooltips | fill `panel`; 0,1,3 ink 8%; 0,12,32 ink 12%; edge ink 8% | fill `#2D3136`; 0,1,3 black 45%; 0,12,32 black 40%; edge white 9%; highlight white 7% |
+| `Modal` | palette, dialogs | fill `panel`; 0,2,6 ink 8%; 0,24,56 ink 18%; edge ink 8% | fill `#303439`; 0,2,6 black 50%; 0,24,56 black 50%; edge white 10%; highlight white 8% |
+
+Dark `muted` is `#98A1AC` so it keeps 4.5:1 on the `Modal` fill. Tests in `theme.rs` hold the ordering, the dark edge separation and the text contrast on every fill.
+
+Not used: gradients, glows, real blur.
 
 ## 3. Interactions
 

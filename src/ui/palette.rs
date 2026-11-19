@@ -498,7 +498,7 @@ pub fn show(app: &mut TidemapApp, ctx: &Context, p: Palette) {
         .backdrop_color(p.scrim.gamma_multiply(t))
         .show(ctx, |ui| {
             ui.multiply_opacity(t);
-            theme::floating(p, token::RADIUS_DIALOG).inner_margin(Margin::ZERO).show(ui, |ui| {
+            theme::elevated(ui, p, theme::Level::Modal, token::RADIUS_DIALOG, Margin::ZERO, |ui| {
                 ui.set_width(width);
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 chosen = contents(app, ui, ctx, p);
