@@ -1059,6 +1059,15 @@ impl eframe::App for TidemapApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        static SLOWMO: std::sync::Once = std::sync::Once::new();
+        SLOWMO.call_once(|| {
+            // `TIDEMAP_SLOWMO=4` plays every animation four times slower; junk means 1.
+            let scale = std::env::var("TIDEMAP_SLOWMO")
+                .ok()
+                .and_then(|value| value.trim().parse::<f32>().ok())
+                .unwrap_or(1.0);
+            crate::motion::set_time_scale(ctx, scale);
+        });
         self.dark = theme::apply(ctx, self.settings.theme);
         self.font_ready = true;
         self.poll(ctx);
