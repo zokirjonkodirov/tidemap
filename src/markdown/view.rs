@@ -144,6 +144,8 @@ pub struct DocView {
     tops: Vec<f32>,
     height_cache: HashMap<u64, f32>,
     slots: HashMap<u64, (Arc<Slot>, u64)>,
+    /// The font-atlas epoch and display scale `slots` were laid out under.
+    laid_out: (u64, f32),
     artifacts: HashMap<u64, Arc<RenderArtifact>>,
     /// The newest picture of each diagram id, shown until its replacement is ready.
     stale: HashMap<String, Arc<RenderArtifact>>,
@@ -189,6 +191,7 @@ impl Default for DocView {
             tops: vec![0.0],
             height_cache: HashMap::new(),
             slots: HashMap::new(),
+            laid_out: (0, 0.0),
             artifacts: HashMap::new(),
             stale: HashMap::new(),
             requested: HashMap::new(),
@@ -595,6 +598,22 @@ impl DocView {
         Some((self.doc.leaves[index].hash, self.scroll_y - self.tops[index], index))
     }
 
+    /// Forgets laid-out text after egui rebuilt its font atlas: the galleys point into the old
+    /// one. A new display scale can also change how lines wrap, so then the measured heights
+    /// go too (the width check in `show` re-measures them).
+    fn drop_stale_galleys(&mut self, ctx: &Context) {
+        let laid_out = (crate::text::epoch(ctx), ctx.pixels_per_point());
+        if laid_out == self.laid_out {
+            return;
+        }
+        if laid_out.1 != self.laid_out.1 {
+            self.height_cache.clear();
+            self.width = 0.0;
+        }
+        self.slots.clear();
+        self.laid_out = laid_out;
+    }
+
     fn rebuild_heights(&mut self, width: f32) {
         self.width = width;
         let doc = self.doc.clone();
@@ -761,6 +780,7 @@ impl DocView {
     pub fn show(&mut self, ui: &mut Ui, input: &Input, engine: &mut Engine, next_job: &mut u64) -> Output {
         let ctx = ui.ctx().clone();
         self.frame += 1;
+        self.drop_stale_galleys(&ctx);
         if self.dir.as_deref() != input.dir {
             self.dir = input.dir.map(std::path::Path::to_path_buf);
             self.images.retry_failed();
@@ -2041,5 +2061,60 @@ mod tests {
         let top = view.tops[leaf];
         assert!(view.scroll_y > 1000.0, "the page scrolled to the match");
         assert!(top >= view.scroll_y && top <= view.scroll_y + 800.0, "the match is on screen: top {top}, scroll {}", view.scroll_y);
+    }
+
+    #[test]
+    fn no_galley_from_a_rebuilt_font_atlas_survives() {
+        let content = big_doc(6);
+        let (ctx, mut engine, blocks) = rig(&content);
+        let mut view = DocView::default();
+        let style = StyleSheet::default();
+        let mut next_job = 1;
+        let mut time = 0.0;
+        let mut frame = |view: &mut DocView, engine: &mut Engine, next_job: &mut u64| {
+            time += 0.016;
+            let mut raw = RawInput::default();
+            raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0)));
+            raw.time = Some(time);
+            let _ = ctx.run(raw, |ctx| {
+                crate::text::observe(ctx);
+                egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
+                    let input = Input {
+                        file_id: "f",
+                        content: &content,
+                        dir: None,
+                        revision: 1,
+                        blocks: &blocks,
+                        active_block: "",
+                        p: theme::palette(false),
+                        dark: false,
+                        style: &style,
+                        saved_scroll: 0.0,
+                    };
+                    view.show(ui, &input, engine, next_job);
+                });
+                crate::text::settle(ctx);
+            });
+        };
+        let scales = |view: &DocView| -> Vec<f32> {
+            let mut found = Vec::new();
+            for (slot, _) in view.slots.values() {
+                match &**slot {
+                    Slot::Text(galley) | Slot::Code(galley) => found.push(galley.pixels_per_point),
+                    Slot::Table(table) => found.extend(table.rows.iter().flat_map(|(_, cells)| cells).map(|galley| galley.pixels_per_point)),
+                    Slot::Plain => {}
+                }
+            }
+            found
+        };
+        frame(&mut view, &mut engine, &mut next_job);
+        frame(&mut view, &mut engine, &mut next_job);
+        assert!(!scales(&view).is_empty());
+        assert!(scales(&view).iter().all(|&ppp| ppp == 1.0));
+        ctx.set_pixels_per_point(2.0);
+        frame(&mut view, &mut engine, &mut next_job);
+        let found = scales(&view);
+        assert!(!found.is_empty());
+        assert!(found.iter().all(|&ppp| ppp == 2.0), "a galley laid out for the old atlas survived: {found:?}");
     }
 }

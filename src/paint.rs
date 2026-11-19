@@ -15,7 +15,7 @@ use tidemap_diagram::{
 };
 use tidemap_model::Camera;
 
-use crate::theme;
+use crate::{text, theme};
 
 /// Items outside the viewport by less than this many world units are still painted.
 const CULL_MARGIN: f32 = 32.0;
@@ -394,6 +394,7 @@ impl Frame<'_> {
         if lines.is_empty() || px < MIN_TEXT_PX || c.a() == 0 {
             return;
         }
+        let (raster, scale) = text::raster(px);
         let first = center[1] - lines.len() as f32 * line_height / 2.0 + line_height / 2.0;
         for (i, line) in lines.iter().enumerate() {
             if line.is_empty() {
@@ -402,12 +403,9 @@ impl Frame<'_> {
             let middle = self.view.pt([center[0], first + i as f32 * line_height]);
             let galley =
                 self.painter
-                    .layout_no_wrap(line.clone(), FontId::new(px, family.clone()), c);
-            let pos = Pos2::new(
-                middle.x - galley.size().x / 2.0,
-                middle.y - galley.size().y / 2.0,
-            );
-            self.painter.galley(pos, galley, c);
+                    .layout_no_wrap(line.clone(), FontId::new(raster, family.clone()), c);
+            let pos = middle - galley.size() * (0.5 * scale);
+            text::paint_scaled(&self.painter, pos, galley, c, scale);
             self.texts += 1;
         }
     }
@@ -445,13 +443,14 @@ impl Frame<'_> {
             let px = CLUSTER_TITLE_SIZE * zoom;
             if px >= MIN_TEXT_PX {
                 let middle = self.view.pt([r.x + 12.0, r.y + zone / 2.0]);
+                let (raster, scale) = text::raster(px);
                 let galley = self.painter.layout_no_wrap(
                     c.title.clone(),
-                    FontId::new(px, theme::font_semibold()),
+                    FontId::new(raster, theme::font_semibold()),
                     text_color,
                 );
-                let pos = Pos2::new(middle.x, middle.y - galley.size().y / 2.0);
-                self.painter.galley(pos, galley, text_color);
+                let pos = Pos2::new(middle.x, middle.y - galley.size().y * 0.5 * scale);
+                text::paint_scaled(&self.painter, pos, galley, text_color, scale);
                 self.texts += 1;
             }
         }

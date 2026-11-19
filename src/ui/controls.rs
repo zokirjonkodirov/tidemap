@@ -3,7 +3,7 @@
 //! The global egui visuals draw no widget strokes, so anything that has to read as a control
 //! (switch, segmented choice, key cap, button) is painted here from the palette.
 
-use egui::{Color32, Context, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, emath::TSTransform, vec2};
+use egui::{Color32, Context, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, vec2};
 
 use crate::motion;
 use crate::theme::{self, Palette, token};
@@ -46,13 +46,9 @@ pub fn pressed_rect(rect: Rect, press: f32) -> Rect {
 /// text is painted untransformed.
 pub fn paint_pressed_label(painter: &egui::Painter, centre: Pos2, text: &str, font: FontId, color: Color32, press: f32) {
     let galley = painter.layout_no_wrap(text.to_owned(), font, color);
-    let pos = centre - galley.size() * 0.5;
-    let mut shape = egui::epaint::TextShape::new(pos, galley, color);
-    if press != 0.0 {
-        let scale = press_scale(press);
-        shape.transform(TSTransform::new(centre.to_vec2() * (1.0 - scale), scale));
-    }
-    painter.add(shape);
+    let scale = press_scale(press);
+    // Scale about the centre: the scaled top-left sits at `centre - size * scale / 2`.
+    crate::text::paint_scaled(painter, centre - galley.size() * (0.5 * scale), galley, color, scale);
 }
 
 fn medium() -> FontId {

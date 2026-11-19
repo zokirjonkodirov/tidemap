@@ -10,6 +10,7 @@ mod motion;
 mod paint;
 mod source_map;
 mod style_file;
+mod text;
 mod theme;
 mod ui;
 

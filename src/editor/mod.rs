@@ -98,6 +98,8 @@ pub struct SourceEditor {
     changed: bool,
 
     galleys: HashMap<u64, (Arc<Galley>, u64)>,
+    /// The font-atlas epoch `galleys` were laid out under.
+    galley_epoch: u64,
     frame: u64,
     reveal: Option<Reveal>,
     drag: Option<Drag>,
@@ -144,6 +146,11 @@ impl SourceEditor {
     ) -> EditorResponse {
         self.frame += 1;
         self.changed = false;
+        let epoch = crate::text::epoch(ui.ctx());
+        if epoch != self.galley_epoch {
+            self.galleys.clear();
+            self.galley_epoch = epoch;
+        }
         let first_open = self.loaded.as_deref() != Some(key);
         if first_open {
             self.loaded = Some(key.to_owned());

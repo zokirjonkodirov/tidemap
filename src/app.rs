@@ -1107,6 +1107,7 @@ impl eframe::App for TidemapApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        crate::text::observe(ctx);
         static SLOWMO: std::sync::Once = std::sync::Once::new();
         SLOWMO.call_once(|| {
             // `TIDEMAP_SLOWMO=4` plays every animation four times slower; junk means 1.
@@ -1148,6 +1149,7 @@ impl eframe::App for TidemapApp {
         self.drive_screenshot(ctx);
         ui::snapshot::paint(ctx);
         log_frame(ctx, frame);
+        crate::text::settle(ctx);
     }
 }
 
