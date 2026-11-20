@@ -10,6 +10,17 @@ The Miro reference informed spacing, clear routing, shape diversity and readable
 
 Layout, as built: a 40 px top bar (sidebar toggle, back and forward, breadcrumb, info, theme), a 260 px sidebar card with a virtualised tree, the content card filling the rest, 8 px from the window edge and from neighbouring cards and hanging from the bar (about 77% of a 1440x940 window), a floating pill for zoom, fit, source and export, a source card on the right that pushes the canvas, and a minimap that avoids the pill. Below 1000 px the sidebar is hidden and the source panel replaces the canvas. Source: `src/ui/`.
 
+### The mark
+
+The app icon is the design language at icon size, drawn by `tools/brand/icon.py` (edit the script, not the files it writes: `assets/icon.svg`, `assets/icon-small.svg`, `assets/icon.png`, `assets/icon.ico`).
+
+- **Tile:** the window frame in a deep tone of the accent (`#2D477A`), with a rim of light along the top and a rim of shade along the bottom: the same top highlight and contact shadow every elevated surface has.
+- **Tide:** three bands rise from the bottom like the elevation levels, each lighter than the one behind, each with a soft shadow and a highlight on its crest. They are also the "tide" in the name.
+- **Map:** a start node (yellow swatch, stadium) and a process node (sky swatch, rectangle) floating on the first crest, joined by an edge that follows the tide's S-curve and ends in a rounded head along the curve's approach angle.
+- **Small sizes:** 48 px and under use `icon-small.svg`: one band, no hairlines, fatter shapes. The website's favicon and top bar use it too.
+
+The earlier terracotta mark belonged to the "warm clarity" direction and was retired with it.
+
 ## 2. Tokens
 
 Values below were read from `src/theme.rs` and `crates/diagram/src/style.rs` on 18 November 2026. If they differ from the code, the code wins.

@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" width="96" height="96" alt="Tidemap">
+
 # Tidemap
 
 Fast, native desktop viewer and editor for Mermaid diagrams in local Markdown and `.mmd` files.
