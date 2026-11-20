@@ -143,7 +143,7 @@ fn package(
     } else {
         BTreeSet::new()
     };
-    let folder_name = format!("Tidemap-0.2.0-{host}");
+    let folder_name = format!("Tidemap-0.3.0-{host}");
     let directory = root.join("release").join(&folder_name);
     fs::create_dir_all(&directory)?;
     let mut files = vec![(executable_name.to_owned(), executable)];
@@ -198,7 +198,7 @@ fn package(
     ));
     let artifacts: Vec<_> = files.iter().map(|(path, bytes)| serde_json::json!({"path":path,"bytes":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes))})).collect();
     files.push(("build-manifest.json".to_owned(), serde_json::to_vec_pretty(&serde_json::json!({
-        "version":"0.2.0", "target":host, "language":"Rust", "ui":"native egui", "renderer":"in-house diagram engine",
+        "version":"0.3.0", "target":host, "language":"Rust", "ui":"native egui", "renderer":"in-house diagram engine",
         "validation":"Compilation and packaging only.",
         "signed":false, "artifacts":artifacts,
     }))?));

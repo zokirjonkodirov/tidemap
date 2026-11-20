@@ -3280,7 +3280,7 @@ dependencies = [
 
 [[package]]
 name = "tidemap"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3301,7 +3301,7 @@ dependencies = [
 
 [[package]]
 name = "tidemap-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "directories",
@@ -3318,7 +3318,7 @@ dependencies = [
 
 [[package]]
 name = "tidemap-diagram"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "ttf-parser",
@@ -3326,7 +3326,7 @@ dependencies = [
 
 [[package]]
 name = "tidemap-model"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3335,7 +3335,7 @@ dependencies = [
 
 [[package]]
 name = "tidemap-renderer"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64",
  "resvg",
@@ -3350,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "tidemap-xtask"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde_json",
  "sha2",
