@@ -17,6 +17,10 @@ mod ui;
 use eframe::egui;
 use std::sync::Arc;
 
+/// The Tidemap mark at 512 px (drawn by `tools/brand/icon.py`): the window icon, and the mark on
+/// the welcome state.
+pub const MARK_PNG: &[u8] = include_bytes!("../assets/icon.png");
+
 fn main() -> eframe::Result {
     if let Some(path) = std::env::var_os("TIDEMAP_ICON_PREVIEW") {
         if let Err(error) = std::fs::write(&path, icons::to_svg_preview()) {
@@ -33,7 +37,7 @@ fn main() -> eframe::Result {
         }
         return Ok(());
     }
-    let icon = image::load_from_memory(include_bytes!("../assets/icon.png"))
+    let icon = image::load_from_memory(MARK_PNG)
         .ok()
         .map(|image| {
             let pixels = image.into_rgba8();
