@@ -66,6 +66,11 @@ impl Rig {
 
 const SHIFT: Modifiers = Modifiers { shift: true, ..Modifiers::NONE };
 const CTRL: Modifiers = Modifiers { command: true, ctrl: true, ..Modifiers::NONE };
+/// The modifier that moves by word: Alt on macOS, Ctrl elsewhere.
+#[cfg(target_os = "macos")]
+const WORD: Modifiers = Modifiers { alt: true, ..Modifiers::NONE };
+#[cfg(not(target_os = "macos"))]
+const WORD: Modifiers = CTRL;
 
 #[test]
 fn click_types_and_undoes() {
@@ -88,7 +93,7 @@ fn selection_navigation_and_delete() {
     let mut rig = Rig::new("one two\nthree\n");
     rig.focus();
     rig.key(Key::Home, Modifiers::NONE);
-    rig.key(Key::ArrowRight, CTRL | SHIFT);
+    rig.key(Key::ArrowRight, WORD | SHIFT);
     rig.key(Key::Backspace, Modifiers::NONE);
     assert_eq!(rig.text, "two\nthree\n");
     rig.key(Key::ArrowDown, Modifiers::NONE);
