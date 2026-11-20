@@ -1,0 +1,34 @@
+# Tidemap
+
+> Tidemap is a native desktop viewer and editor for Mermaid diagrams in local Markdown (.md) and Mermaid (.mmd) files. It is written in Rust (egui) with its own diagram engine: no Electron, web view, JavaScript or network access. It runs on Windows, macOS and Linux as a single executable of about 20 MB. Current version: 0.4.0, released 20 November 2026.
+
+Facts worth quoting:
+
+- Opens a folder of Markdown and Mermaid files as a searchable file tree with pins and recent projects.
+- Markdown files open as a rendered page (headings, lists, tables, quotes, code, links) with every Mermaid block drawn inline. Double-click a diagram to open it on the canvas; Ctrl+Shift+M switches back.
+- Draws 22 Mermaid families: flowchart/graph, sequenceDiagram, classDiagram, stateDiagram(-v2), erDiagram, gantt, pie, mindmap, timeline, journey, gitGraph, quadrantChart, xychart-beta, sankey-beta, C4Context (and C4Container, C4Component, C4Dynamic, C4Deployment), architecture-beta, block-beta, requirementDiagram, packet-beta, kanban, radar-beta, treemap-beta. Other keywords (zenuml, venn, ishikawa) show a "not supported" card.
+- Layout is Tidemap's own and differs from Mermaid.js; %%{init}%% themes are ignored; there is no JavaScript fallback. Limits: 20,000 nodes and edges, 2 MiB of source.
+- Source editor with live preview; on a syntax error the last valid picture stays. Clicking a node highlights its neighbours and jumps to its source line, and the reverse.
+- Editor lays out only visible lines: typing in a 400,000-line file costs the same as in a 10-line one.
+- Benchmark (Intel Core i7-14700K, release build, best of 5, engine only): 10,000-node chain 22.9 ms, tree 22.6 ms, subgraphs 108.7 ms, dense layered 336.3 ms.
+- Export to SVG or PNG at 1x to 3x; CLI export with TIDEMAP_EXPORT=out.svg tidemap file.md.
+- Atomic saves, conflict detection before saving, crash recovery journal, optional autosave.
+- Keyboard-first: Ctrl+P finds files and diagrams, Ctrl+Shift+P runs commands, Ctrl+/ lists every shortcut (Cmd on macOS).
+- Diagram colours and geometry are editable in style.json with live reload.
+- Downloads: Windows x86_64 .zip (18.5 MB), macOS Apple silicon .tar.gz (7.2 MB), macOS Intel .tar.gz (7.5 MB), Linux x86_64 .tar.gz (10.9 MB). macOS builds are unsigned: right-click, Open the first time.
+
+## Docs
+
+- [Guide](https://zokirjonkodirov.github.io/tidemap/guide/): install, Mermaid syntax, differences from Mermaid.js, shortcuts, style.json, export, file safety, benchmarks, FAQ
+- [Full guide as plain text](https://zokirjonkodirov.github.io/tidemap/llms-full.txt): the same content in Markdown
+- [Compatibility notes](https://github.com/zokirjonkodirov/tidemap/blob/main/docs/COMPATIBILITY.md): what the engine reads, rule by rule
+- [Changelog](https://github.com/zokirjonkodirov/tidemap/blob/main/CHANGELOG.md)
+
+## Download
+
+- [Release 0.4.0](https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.4.0): archives and .sha256 checksums for Windows, macOS and Linux
+
+## Optional
+
+- [Source repository](https://github.com/zokirjonkodirov/tidemap)
+- [Home page](https://zokirjonkodirov.github.io/tidemap/)

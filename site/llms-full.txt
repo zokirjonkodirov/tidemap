@@ -1,0 +1,274 @@
+Source: https://zokirjonkodirov.github.io/tidemap/guide/ (generated from that page by tools/site/build.py).
+
+# Tidemap guide
+
+Everything about version 0.4.0, on one page. Shortcuts are written with Ctrl; on macOS use ⌘.
+
+## What Tidemap is
+
+Tidemap is a desktop app for reading and editing Mermaid diagrams that live in local Markdown (`.md`) and Mermaid (`.mmd`) files.
+
+It is written in Rust. The interface uses egui, and an engine written for Tidemap parses Mermaid source, lays diagrams out and draws them. There is no Electron, no web view and no JavaScript, and the app works without a network connection. It runs on Windows, macOS and Linux as a single executable of about 20 MB.
+
+Open a folder and Tidemap lists its Markdown and Mermaid files. Markdown files open as a rendered page with each Mermaid block drawn inline; a diagram opens on a canvas with pan, zoom, a minimap, an outline and search. The source editor sits beside the canvas and the picture follows it as you type.
+
+## Install
+
+Download the archive for your system from the [0.4.0 release](https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.4.0). There is no installer: extract the archive and run the app from wherever you put it.
+
+| System | Archive | Size |
+|---|---|---|
+| Windows x86_64 | [`Tidemap-0.4.0-x86_64-pc-windows-msvc.zip`](https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-pc-windows-msvc.zip) | 18.5 MB |
+| macOS, Apple silicon | [`Tidemap-0.4.0-aarch64-apple-darwin.tar.gz`](https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-aarch64-apple-darwin.tar.gz) | 7.2 MB |
+| macOS, Intel | [`Tidemap-0.4.0-x86_64-apple-darwin.tar.gz`](https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-apple-darwin.tar.gz) | 7.5 MB |
+| Linux x86_64 | [`Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz`](https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz) | 10.9 MB |
+
+### Windows
+
+Unzip the archive anywhere and run `Tidemap.exe`. To check the download, compare the hash PowerShell prints with the one in the `.sha256` file:
+
+```
+Get-FileHash .\Tidemap-0.4.0-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+```
+
+### macOS
+
+Check the download, extract it and run `tidemap`:
+
+```
+shasum -a 256 -c Tidemap-0.4.0-aarch64-apple-darwin.tar.gz.sha256
+tar -xzf Tidemap-0.4.0-aarch64-apple-darwin.tar.gz
+```
+
+The app is not signed yet, so macOS stops it the first time. Right-click `tidemap` and choose Open, or clear the quarantine flag:
+
+```
+xattr -d com.apple.quarantine tidemap
+```
+
+### Linux
+
+```
+sha256sum -c Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz
+```
+
+Run `tidemap`. File dialogs need GTK 3. The archive includes `tidemap.desktop` and `tidemap.png` for a launcher entry.
+
+## First steps
+
+1. **Open a folder** with Ctrl+Shift+O, or one file with Ctrl+O. The sidebar shows the folder as a searchable tree, with the number of diagrams beside each Markdown file. Recent folders come back with Ctrl+R.
+2. **Pick a file.** A Markdown file opens as a page, with headings, lists, tables, quotes, code, links, selectable text and every Mermaid block drawn in place. A `.mmd` file opens on the canvas.
+3. **Open a diagram** from a page by double-clicking it. Ctrl+Shift+M switches between page and diagram, and [ and ] step through the diagrams in the file.
+4. **Edit.** Ctrl+E opens the source beside the canvas, with a tab for the current diagram and one for the full file. The picture follows your typing; on a syntax error the last good picture stays up.
+5. **Follow a node.** Click a node to light up its neighbours and jump to its source line. Click a line to find its node. Esc clears the selection.
+6. **Find anything.** Ctrl+P finds files and diagrams; type > for commands. Ctrl+F searches the labels of the open diagram, or the page.
+7. **Save and export.** Ctrl+S saves, Ctrl+Shift+X exports SVG or PNG.
+
+## Mermaid syntax
+
+Tidemap reads Mermaid blocks fenced as ````mermaid` in Markdown, and whole `.mmd` files. These families are drawn:
+
+| Family | Keyword | What is read |
+|---|---|---|
+| Flowchart | `flowchart`, `graph` | All directions, all 14 node shapes and the `@{ shape }` form, every edge kind and label, subgraphs, `classDef`, `class`, `style`, `linkStyle`. |
+| Sequence | `sequenceDiagram` | Participants and actors with aliases, every message arrow, activations, notes, `loop`, `alt`, `opt`, `par`, `critical`, `break`, `rect`, `autonumber`. `box` is ignored. |
+| Class | `classDiagram` | Annotations, attributes, methods, generics, all relation markers, cardinalities, labels, notes, namespaces. |
+| State | `stateDiagram-v2` | Transitions, `[*]`, composite states, descriptions, choice, fork and join, notes, `direction`, styling. Concurrent regions are ignored. |
+| Entity relationship | `erDiagram` | Entities with typed attributes and PK, FK, UK keys, crow's foot cardinalities, identifying and non-identifying lines. |
+| Gantt | `gantt` | Title, `dateFormat`, sections, `crit`, `active`, `done`, `milestone`, dates, durations, `after`. |
+| Pie | `pie` | Title, `showData`, slices. |
+| Mindmap | `mindmap` | Indented tree with node shapes, drawn left to right. |
+| Timeline | `timeline` | Title, sections, periods with several events. |
+| User journey | `journey` | Title, sections, tasks with scores and actors. |
+| Git graph | `gitGraph` | Commits with ids, tags and types, branches, checkout, merge, cherry-pick, LR and TB. |
+| Quadrant chart | `quadrantChart` | Axes, quadrant titles, points. |
+| XY chart | `xychart-beta` | Title, categorical or numeric x axis, y range, bar and line series. |
+| Sankey | `sankey-beta` | CSV rows of source, target, value. |
+| C4 | `C4Context` and siblings | Person, System, Container, Component with external, database and queue variants, boundaries, relationships. |
+| Architecture | `architecture-beta` | Nested groups, services, junctions, edges. |
+| Block | `block-beta` | Columns, spans, `space`, block shapes, labelled arrows. |
+| Requirement | `requirementDiagram` | All requirement kinds, elements, relationships. |
+| Packet | `packet-beta` | Title, bit ranges, 32 bits per row. |
+| Kanban | `kanban` | Columns with cards. |
+| Radar | `radar-beta` | Axes, curves, min, max, ticks, graticule. |
+| Treemap | `treemap-beta` | Indented sections and valued leaves. |
+
+Any other first word, for example `zenuml`, `venn` or `ishikawa`, shows a card that says the family is not supported yet. The source stays editable. The complete notes, rule by rule, are in [COMPATIBILITY.md](https://github.com/zokirjonkodirov/tidemap/blob/main/docs/COMPATIBILITY.md).
+
+## Differences from Mermaid.js
+
+- Layout is Tidemap's own. The same source gives the same structure, but node positions and edge routes differ from what GitHub or Mermaid Live draw.
+- `%%{init}%%` directives and themes are skipped. Colours come from Tidemap's palette, `classDef` and `style`, or your style.json.
+- There is no JavaScript fallback: a family the engine does not know is shown as unsupported, not drawn another way.
+- A diagram may hold up to 20,000 nodes and edges and 2 MiB of source.
+- Arrowheads are rounded and follow the curve of the edge.
+
+## Keyboard shortcuts
+
+The same list is in the app under Ctrl+/. Single keys work while you are not typing and no dialog is open.
+
+| Action | Keys |
+|---|---|
+| Find a file or diagram | Ctrl+P or Ctrl+K |
+| Run a command | Ctrl+Shift+P |
+| Switch project | Ctrl+R |
+| Open folder | Ctrl+Shift+O |
+| Open file | Ctrl+O |
+| New diagram | Ctrl+N |
+| Save | Ctrl+S |
+| Save a copy | Ctrl+Shift+S |
+| Show or hide source | Ctrl+E |
+| Show or hide sidebar | Ctrl+B |
+| Go to the file tree | Ctrl+Shift+E |
+| Search files in the sidebar | Ctrl+Shift+F or / |
+| Previous file | Ctrl+Tab |
+| Pin or unpin file | Ctrl+D |
+| Back, forward | Alt+←, Alt+→ |
+| Previous, next diagram | [, ] or Alt+PgUp, Alt+PgDn |
+| Page or diagram | Ctrl+Shift+M |
+| Find in diagram | Ctrl+F |
+| Show or hide outline | Ctrl+Shift+L |
+| Fit diagram | F or 0 |
+| Actual size | 1 |
+| Zoom in, out | =, - |
+| Export diagram | Ctrl+Shift+X |
+| Light or dark | Ctrl+Shift+D |
+| Settings | Ctrl+, |
+| All shortcuts | Ctrl+/, F1 or ? |
+| Clear selection, close | Esc |
+
+Toggle reduced motion has no shortcut; run it from the command palette.
+
+## Styling with style.json
+
+Diagram colours and geometry live in `style.json`. Tidemap writes it with the defaults on first start, checks it about once a second and redraws when it changes. A file that does not parse is not used; the last good style stays and the app names the line at fault. Settings has an **Open style file** button.
+
+| System | Location |
+|---|---|
+| Windows | `%LOCALAPPDATA%\Tidemap\Tidemap\data\style.json` |
+| macOS | `~/Library/Application Support/dev.Tidemap.Tidemap/style.json` |
+| Linux | `~/.local/share/tidemap/style.json` (or under `$XDG_DATA_HOME`) |
+
+The `TIDEMAP_DATA_DIR` environment variable moves this folder. Missing fields take their defaults and values out of range are clamped.
+
+```
+{
+  "metrics": { "font_size": 14.0, "rank_gap": 64.0, "node_gap": 40.0, "radius": 12.0 },
+  "light": { "edge": [138, 145, 156, 255], "sky": { "fill": [220, 235, 250, 255], "stroke": [143, 184, 224, 255] } },
+  "dark": { "canvas": [27, 29, 32, 255] },
+  "color_by": "Subgraph",
+  "edge_width": 1.5,
+  "arrow_size": 7.0,
+  "node_stroke": 1.0,
+  "cluster_tint": 0.35
+}
+```
+
+- `metrics`: `font_size` (11 to 24), `line_height`, `max_label_width` (80 to 600), `pad_x` and `pad_y` (4 to 48), `radius` (4 to 32), `rank_gap` and `node_gap` (16 to 240), `edge_label_font`, `cluster_pad`, `cluster_title`, `width_step`.
+- `light` and `dark`: `canvas`, `text`, `edge`, `label_bg`, and the swatches `sky`, `peach`, `mint`, `yellow`, `lavender`, `gray` and `rose`, each with a `fill` and a `stroke`. Colours are `[red, green, blue, alpha]` from 0 to 255.
+- `color_by`: `"Role"` colours flowchart nodes by shape (process, decision, data store, start and end, external); `"Subgraph"` gives each top-level subgraph its own swatch.
+- Colours set in the diagram with `classDef` or `style` always win.
+
+## Export
+
+Ctrl+Shift+X or the export button on the canvas exports the open diagram as SVG, or as PNG at 1x, 2x or 3x. Exports use the appearance on screen, light or dark.
+
+From a terminal, `TIDEMAP_EXPORT` exports the first diagram of a file and exits:
+
+```
+# macOS and Linux
+TIDEMAP_EXPORT=flow.svg ./tidemap docs/README.md
+TIDEMAP_EXPORT=flow.png TIDEMAP_EXPORT_SCALE=2 TIDEMAP_SHOT_THEME=dark ./tidemap flow.mmd
+
+# Windows PowerShell
+$env:TIDEMAP_EXPORT = "flow.svg"; .\Tidemap.exe docs\README.md
+```
+
+Every diagram on the [home page](https://zokirjonkodirov.github.io/tidemap/#diagrams) was made this way.
+
+## Files and safety
+
+- **No network.** Tidemap has no network code. Remote images in Markdown are not fetched.
+- **Atomic saves.** A save replaces the file in one step, so a crash mid-save cannot leave half a file.
+- **Conflicts ask first.** Before saving, Tidemap checks that the file on disk is the one you opened. If another program changed it, you choose to compare, reload or save your edits as a copy.
+- **Crash recovery.** Unsaved edits are journalled in the data folder and offered back the next time the file opens.
+- **Autosave** is a setting. When on, Tidemap saves after a pause in typing and never over a conflict.
+- **Read-only files** open normally; save a copy to keep changes.
+
+## Performance
+
+Parse, layout and scene build of generated flowcharts. Best of 5 runs, release build, Intel Core i7-14700K with 20 cores; layout runs on several threads. The engine only: window start-up and painting are not counted. Reproduce with `cargo native bench`.
+
+| Shape | Nodes | Edges | Parse | Layout | Scene | Total |
+|---|---|---|---|---|---|---|
+| Chain | 200 | 199 | 0.1 ms | 0.3 ms | 0.0 ms | **0.5 ms** |
+| Chain | 2,000 | 1,999 | 1.1 ms | 3.4 ms | 0.5 ms | **5.1 ms** |
+| Chain | 10,000 | 9,999 | 5.7 ms | 14.1 ms | 3.1 ms | **22.9 ms** |
+| Tree | 200 | 199 | 0.1 ms | 0.5 ms | 0.0 ms | **0.6 ms** |
+| Tree | 2,000 | 1,999 | 1.1 ms | 7.0 ms | 0.5 ms | **8.6 ms** |
+| Tree | 10,000 | 9,999 | 5.4 ms | 14.1 ms | 3.0 ms | **22.6 ms** |
+| Dense layers | 200 | 360 | 0.2 ms | 2.4 ms | 0.1 ms | **2.7 ms** |
+| Dense layers | 2,000 | 3,960 | 1.9 ms | 23.4 ms | 0.8 ms | **26.2 ms** |
+| Dense layers | 10,000 | 19,960 | 9.4 ms | 317.7 ms | 9.2 ms | **336.3 ms** |
+| Subgraphs | 200 | 212 | 0.1 ms | 5.8 ms | 0.1 ms | **5.9 ms** |
+| Subgraphs | 2,000 | 2,120 | 0.8 ms | 38.2 ms | 0.6 ms | **39.6 ms** |
+| Subgraphs | 10,000 | 10,600 | 4.5 ms | 99.7 ms | 4.5 ms | **108.7 ms** |
+
+The source editor lays out only the lines on screen, so typing, selecting and moving cost the same in a 400,000-line file as in a 10-line one.
+
+## Appearance and motion
+
+- Light and dark appearances, switched with Ctrl+Shift+D or the button in the top bar. Diagrams have their own palette for each.
+- Motion follows the system's animation setting. Settings has a Motion row (System, Reduced, Full) to override it. Reduced keeps fades and drops movement.
+- Text is set in Inter and code in IBM Plex Mono, both bundled.
+
+## Build from source
+
+The Rust toolchain is pinned in `rust-toolchain.toml`. From a clone of the [repository](https://github.com/zokirjonkodirov/tidemap):
+
+```
+cargo native build     # release build
+cargo native run       # open the app
+cargo native package   # portable archive in release/
+cargo native bench     # engine timings
+cargo test --workspace # app and engine tests
+```
+
+- Windows: the GNU or MSVC toolchain.
+- macOS: nothing extra.
+- Linux: `sudo apt install libgtk-3-dev libxkbcommon-dev libwayland-dev libx11-dev` or your distribution's equivalent.
+
+## Questions
+
+### Does Tidemap need an internet connection?
+
+No. Tidemap has no network code. It reads and writes the local files you open, and remote images in Markdown are not fetched.
+
+### Is it built on Electron or a web view?
+
+No. Tidemap is written in Rust with the egui toolkit, and its own engine parses, lays out and draws the diagrams. No JavaScript runs.
+
+### Will diagrams look the same as on GitHub or in Mermaid Live?
+
+The structure is the same; the picture is not identical. Tidemap lays diagrams out with its own engine, so positions and edge routes differ from Mermaid.js, and `%%{init}%%` themes are ignored. See differences.
+
+### Which diagram types are supported?
+
+22 families: flowchart, sequence, class, state, entity relationship, Gantt, pie, mindmap, timeline, user journey, git graph, quadrant chart, XY chart, sankey, C4, architecture, block, requirement, packet, kanban, radar and treemap. Others show a "not supported" card and stay editable. See syntax.
+
+### How large can a diagram be?
+
+Up to 20,000 nodes and edges and 2 MiB of source. A generated 10,000-node chain is parsed, laid out and built in about 23 ms; see performance.
+
+### Can I export diagrams?
+
+Yes: SVG, or PNG at 1x, 2x or 3x, in the appearance on screen. Ctrl+Shift+X opens the export dialog, and `TIDEMAP_EXPORT` exports from a terminal; see export.
+
+### macOS says the app cannot be opened.
+
+Tidemap is not signed yet. The first time, right-click the app and choose Open, or run `xattr -d com.apple.quarantine tidemap`.
+
+### Can I change the diagram colours?
+
+Yes. Colours and geometry live in `style.json`, which reloads while the app runs; see styling. Colours set in a diagram with `classDef` or `style` win over it.

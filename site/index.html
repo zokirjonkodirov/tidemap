@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tidemap: native Mermaid viewer and editor for Markdown</title>
+  <meta name="description" content="Desktop viewer and editor for Mermaid diagrams in Markdown and .mmd files. Its own Rust engine draws 22 diagram types with live preview and SVG or PNG export. Offline, for Windows, macOS and Linux.">
+  <link rel="canonical" href="https://zokirjonkodirov.github.io/tidemap/">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FAFAF8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1B1D20" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="alternate" type="text/plain" href="llms.txt" title="Tidemap for language models">
+  <link rel="sitemap" href="sitemap.xml">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tidemap">
+  <meta property="og:title" content="Tidemap: native Mermaid viewer and editor for Markdown">
+  <meta property="og:description" content="Read and edit the Mermaid diagrams in your Markdown. Own Rust engine, 22 diagram types, offline. Windows, macOS, Linux.">
+  <meta property="og:url" content="https://zokirjonkodirov.github.io/tidemap/">
+  <meta property="og:image" content="https://zokirjonkodirov.github.io/tidemap/assets/card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tidemap: a flowchart drawn by its engine, under the line 'Read and edit the Mermaid diagrams in your Markdown.'">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preload" href="assets/fonts/inter-400.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="assets/fonts/inter-600.woff" as="font" type="font/woff" crossorigin>
+  <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.classList.add("js")</script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://zokirjonkodirov.github.io/tidemap/#app",
+        "name": "Tidemap",
+        "description": "Native desktop viewer and editor for Mermaid diagrams in local Markdown and .mmd files. Written in Rust with its own diagram engine: no Electron, WebView, JavaScript or browser. Works fully offline.",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Diagram viewer and editor",
+        "operatingSystem": "Windows, macOS, Linux",
+        "softwareVersion": "0.4.0",
+        "datePublished": "2026-11-20",
+        "url": "https://zokirjonkodirov.github.io/tidemap/",
+        "downloadUrl": "https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.4.0",
+        "releaseNotes": "https://github.com/zokirjonkodirov/tidemap/blob/main/CHANGELOG.md",
+        "image": "https://zokirjonkodirov.github.io/tidemap/assets/card.png",
+        "screenshot": [
+          "https://zokirjonkodirov.github.io/tidemap/assets/shots/page-light-1440.webp",
+          "https://zokirjonkodirov.github.io/tidemap/assets/shots/palette-light-1440.webp"
+        ],
+        "featureList": [
+          "Opens folders of Markdown (.md) and Mermaid (.mmd) files",
+          "Renders Markdown as a page with Mermaid diagrams drawn inline",
+          "22 Mermaid diagram families: flowchart, sequence, class, state, entity relationship, Gantt, pie, mindmap, timeline, user journey, git graph, quadrant, XY chart, sankey, C4, architecture, block, requirement, packet, kanban, radar, treemap",
+          "Source editor with live preview that keeps the last valid picture on syntax errors",
+          "Click a node to highlight its neighbours and jump to its source line",
+          "Export to SVG or PNG at 1x to 3x",
+          "Keyboard-first: file finder, command palette, shortcuts for every command",
+          "Atomic saves, conflict detection, crash recovery, optional autosave",
+          "Light and dark appearance, reduced motion, editable style.json"
+        ],
+        "sameAs": ["https://github.com/zokirjonkodirov/tidemap"]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://zokirjonkodirov.github.io/tidemap/#site",
+        "name": "Tidemap",
+        "url": "https://zokirjonkodirov.github.io/tidemap/",
+        "inLanguage": "en"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.5 8h9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 5.5v-2a1 1 0 0 1 1-1h2M10.5 2.5h2a1 1 0 0 1 1 1v2M13.5 10.5v2a1 1 0 0 1-1 1h-2M5.5 13.5h-2a1 1 0 0 1-1-1v-2"/><rect x="5.75" y="5.75" width="4.5" height="4.5" rx="1.25"/></symbol>
+  <symbol id="i-code" viewBox="0 0 16 16"><path d="M5.5 4.5 2.25 8l3.25 3.5M10.5 4.5 13.75 8l-3.25 3.5"/></symbol>
+  <symbol id="i-export" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5.25 7.5 8 10.25l2.75-2.75M2.75 11v.75a1.75 1.75 0 0 0 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V11"/></symbol>
+  <symbol id="i-left" viewBox="0 0 16 16"><path d="M9.75 3.75 5.5 8l4.25 4.25"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16"><path d="M6.25 3.75 10.5 8l-4.25 4.25"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M3.75 6.25 8 10.5l4.25-4.25"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.75"/><path d="M10.5 5.5V4.25A1.75 1.75 0 0 0 8.75 2.5h-4.5A1.75 1.75 0 0 0 2.5 4.25v4.5a1.75 1.75 0 0 0 1.75 1.75H5.5"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="./" aria-label="Tidemap home"><img src="assets/icon.svg" width="30" height="30" alt="">Tidemap</a>
+    <nav class="nav" aria-label="Main">
+      <a class="wide" href="#diagrams">Diagrams</a>
+      <a href="guide/">Guide</a>
+      <a href="https://github.com/zokirjonkodirov/tidemap">GitHub</a>
+      <a class="btn soft wide" href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero wrap" aria-labelledby="hero-title">
+    <h1 id="hero-title">Read and edit the Mermaid diagrams in your Markdown.</h1>
+    <div class="hero-row">
+      <p class="lede">Tidemap opens a folder of Markdown and <code>.mmd</code> files and draws every Mermaid diagram with its own Rust engine. No browser, no Electron, no network. One small app for Windows, macOS and Linux.</p>
+      <div>
+        <div class="actions">
+          <a class="btn quiet" href="#download" id="get-other">All platforms</a>
+          <a class="btn primary" href="#download" id="get" data-download>Download Tidemap</a>
+        </div>
+        <p class="fine" id="get-meta">Version 0.4.0 for Windows, macOS and Linux. Runs without installing.</p>
+      </div>
+    </div>
+  </section>
+
+  <figure class="demo wrap" aria-labelledby="demo-cap">
+    <div class="window enter" id="window" data-src-default="wide">
+      <div class="win-bar">
+        <p class="crumbs" aria-live="polite"><span class="dir">docs</span><span class="sep dir">/</span><strong>README.md</strong><span class="sep">·</span><span class="title" id="win-title">Request path</span><span class="count" id="win-count">1 of 3</span></p>
+        <div class="win-steps">
+          <button class="ctl" type="button" id="prev" aria-label="Previous diagram" title="Previous diagram  ["><svg class="i"><use href="#i-left"/></svg></button>
+          <button class="ctl" type="button" id="next" aria-label="Next diagram" title="Next diagram  ]"><svg class="i"><use href="#i-right"/></svg></button>
+        </div>
+      </div>
+      <div class="win-body">
+        <div class="canvas" id="canvas" tabindex="0" role="group" aria-roledescription="diagram canvas" aria-label="Diagram canvas. Arrow keys select nodes, Escape clears, [ and ] switch diagrams, F fits, plus and minus zoom.">
+          <!-- build:hero -->
+<style>@media (prefers-color-scheme:dark){.h0-0{stroke:#7C848F}.h0-1{fill:#7C848F}.h0-2{fill:#24272B}.h0-3{fill:#E6E8EB}.h0-4{fill:#453E22}.h0-5{stroke:#8F8040}.h0-6{fill:#26384A}.h0-7{stroke:#4F7396}.h0-8{fill:#4A3327}.h0-9{stroke:#96684C}.h0-10{fill:#243F31}.h0-11{stroke:#4D8566}.h0-12{fill:#352F4D}.h0-13{stroke:#6E61A0}.h1-0{stroke:#7C848F}.h1-1{fill:#7C848F}.h1-2{fill:#24272B}.h1-3{fill:#E6E8EB}.h1-4{fill:#26384A}.h1-5{stroke:#4F7396}.h2-0{stroke:#7C848F}.h2-1{fill:#7C848F}.h2-2{fill:#24272B}.h2-3{fill:#E6E8EB}.h2-4{fill:#26384A}.h2-5{stroke:#4F7396}}</style>
+<div class="stage" data-index="0" data-title="Request path" data-w="963.69" data-h="222">
+<svg class="dia" viewBox="-24 -24 963.69 222" width="963.69" height="222" role="img" aria-label="Request path: diagram drawn by Tidemap">
+<g class="edge" data-id="e0" data-from="Client" data-to="Gateway" data-lines="2">
+<path d="M120 64C143.74 64 156.47 64 178.61 64" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h0-0"/>
+<path d="M182.65 65.16L177.68 67.3Q175.55 68.21 175.55 65.9L175.55 62.1Q175.55 59.79 177.68 60.7L182.65 62.84Q185.35 64 182.65 65.16Z" fill="#8A919C" class="h0-1"/>
+</g>
+<g class="edge" data-id="e1" data-from="Gateway" data-to="Auth" data-lines="3">
+<path d="M304 64C327.74 64 340.47 64 362.61 64" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h0-0"/>
+<path d="M366.65 65.16L361.68 67.3Q359.55 68.21 359.55 65.9L359.55 62.1Q359.55 59.79 361.68 60.7L366.65 62.84Q369.35 64 366.65 65.16Z" fill="#8A919C" class="h0-1"/>
+</g>
+<g class="edge" data-id="e2" data-from="Auth" data-to="Reject" data-lines="4">
+<path d="M495.38 54.03C521.16 47.52 535.26 22 561.84 22C584.72 22 597.02 22 618.3 22" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h0-0"/>
+<path d="M622.34 23.16L617.37 25.3Q615.24 26.21 615.24 23.9L615.24 20.1Q615.24 17.79 617.37 18.7L622.34 20.84Q625.04 22 622.34 23.16Z" fill="#8A919C" class="h0-1"/>
+</g>
+<g class="edge" data-id="e3" data-from="Auth" data-to="Charges" data-lines="5">
+<path d="M495.38 73.97C521.16 80.48 535.26 106 561.84 106C579.9 106 589.78 106 606.3 106" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h0-0"/>
+<path d="M610.34 107.16L605.37 109.3Q603.24 110.21 603.24 107.9L603.24 104.1Q603.24 101.79 605.37 102.7L610.34 104.84Q613.04 106 610.34 107.16Z" fill="#8A919C" class="h0-1"/>
+</g>
+<g class="edge" data-id="e4" data-from="Charges" data-to="Ledger" data-lines="6">
+<path d="M731.69 99.4C759.28 91.96 776.22 70.69 802.54 61.59" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h0-0"/>
+<path d="M806.78 61.53L802.76 65.15Q801.04 66.7 800.29 64.5L799.08 60.91Q798.34 58.72 800.65 58.9L806.04 59.33Q808.97 59.57 806.78 61.53Z" fill="#8A919C" class="h0-1"/>
+</g>
+<g class="edge" data-id="e5" data-from="Charges" data-to="Events" data-lines="7">
+<path d="M731.69 112.6C754.38 119.73 769.07 141 790.63 150.14" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h0-0"/>
+<path d="M794 152.56L788.59 152.64Q786.27 152.68 787.15 150.54L788.6 147.03Q789.48 144.89 791.1 146.54L794.88 150.41Q796.94 152.51 794 152.56Z" fill="#8A919C" class="h0-1"/>
+</g>
+<g class="edge-label" data-id="e2" data-from="Auth" data-to="Reject" data-lines="4">
+<rect x="547" y="10" width="29.68" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h0-2 h0-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="561.84" y="26.68">No</tspan></text>
+</g>
+<g class="edge-label" data-id="e3" data-from="Auth" data-to="Charges" data-lines="5">
+<rect x="544" y="94" width="35.69" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h0-2 h0-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="561.84" y="110.68">Yes</tspan></text>
+</g>
+<g class="node" data-id="Client" data-lines="2">
+<path d="M22 42L98 42C110.15 42 120 51.85 120 64L120 64C120 76.15 110.15 86 98 86L22 86C9.85 86 0 76.15 0 64L0 64C0 51.85 9.85 42 22 42Z" fill="#FFF4C2" stroke="#E3CC6B" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-4 h0-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="60" y="69.04">Client</tspan></text>
+</g>
+<g class="node" data-id="Gateway" data-lines="2 3">
+<path d="M196 42L292 42C298.63 42 304 47.37 304 54L304 74C304 80.63 298.63 86 292 86L196 86C189.37 86 184 80.63 184 74L184 54C184 47.37 189.37 42 196 42Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-6 h0-7"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="244" y="69.04">API gateway</tspan></text>
+</g>
+<g class="node" data-id="Auth" data-lines="3 4 5">
+<path d="M436.57 22.84C440 20.78 440 20.78 443.43 22.84L508.57 61.94C512 64 512 64 508.57 66.06L443.43 105.16C440 107.22 440 107.22 436.57 105.16L371.43 66.06C368 64 368 64 371.43 61.94Z" fill="#FFE3D1" stroke="#E8A982" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-8 h0-9"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="440" y="69.04">Token valid?</tspan></text>
+</g>
+<g class="node" data-id="Reject" data-lines="4">
+<path d="M645.69 0L697.69 0C709.84 0 719.69 9.85 719.69 22L719.69 22C719.69 34.15 709.84 44 697.69 44L645.69 44C633.54 44 623.69 34.15 623.69 22L623.69 22C623.69 9.85 633.54 0 645.69 0Z" fill="#FFF4C2" stroke="#E3CC6B" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-4 h0-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="671.69" y="27.04">401</tspan></text>
+</g>
+<g class="node" data-id="Charges" data-lines="5 6 7">
+<path d="M623.69 84L719.69 84C726.32 84 731.69 89.37 731.69 96L731.69 116C731.69 122.63 726.32 128 719.69 128L623.69 128C617.06 128 611.69 122.63 611.69 116L611.69 96C611.69 89.37 617.06 84 623.69 84Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-6 h0-7"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="671.69" y="111.04">Charges API</tspan></text>
+</g>
+<g class="node" data-id="Ledger" data-lines="6">
+<path d="M807.69 38C807.69 33.58 829.18 30 855.69 30C882.2 30 903.69 33.58 903.69 38L903.69 82C903.69 86.42 882.2 90 855.69 90C829.18 90 807.69 86.42 807.69 82Z" fill="#D9F2E3" stroke="#8CC9A6" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-10 h0-11"/>
+<path d="M807.69 38C807.69 42.42 829.18 46 855.69 46C882.2 46 903.69 42.42 903.69 38" fill="none" stroke="#8CC9A6" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-11"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="855.69" y="69.04">Ledger</tspan></text>
+</g>
+<g class="node" data-id="Events" data-lines="7">
+<path d="M807.69 130L903.69 130C910.32 130 915.69 135.37 915.69 142L915.69 162C915.69 168.63 910.32 174 903.69 174L807.69 174C801.06 174 795.69 168.63 795.69 162L795.69 142C795.69 135.37 801.06 130 807.69 130Z" fill="#E9E3FA" stroke="#B0A0DE" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-12 h0-13"/>
+<path d="M803.69 131.19L803.69 172.81" fill="none" stroke="#B0A0DE" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-13"/>
+<path d="M907.69 131.19L907.69 172.81" fill="none" stroke="#B0A0DE" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h0-13"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h0-3"><tspan x="855.69" y="157.04">Event bus</tspan></text>
+</g>
+</svg>
+</div>
+<div class="stage" data-index="1" data-title="Checkout" data-w="444.23" data-h="428" hidden>
+<svg class="dia" viewBox="-24 -24 444.23 428" width="444.23" height="428" role="img" aria-label="Checkout: diagram drawn by Tidemap">
+<g class="edge" data-id="e0" data-from="Shopper" data-to="Shopper (end)" data-lines="2">
+<path d="M70.43 60C70.43 146.67 70.43 233.33 70.43 320" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 4.5" class="h1-0"/>
+</g>
+<g class="edge" data-id="e1" data-from="App" data-to="App (end)" data-lines="3">
+<path d="M182.87 60C182.87 146.67 182.87 233.33 182.87 320" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 4.5" class="h1-0"/>
+</g>
+<g class="edge" data-id="e2" data-from="API" data-to="API (end)" data-lines="4">
+<path d="M312.76 60C312.76 146.67 312.76 233.33 312.76 320" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 4.5" class="h1-0"/>
+</g>
+<g class="edge" data-id="e3" data-from="Shopper" data-to="App" data-lines="5">
+<path d="M70.43 126C106.12 126 141.8 126 177.48 126" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h1-0"/>
+<path d="M181.52 127.16L176.55 129.3Q174.42 130.21 174.42 127.9L174.42 124.1Q174.42 121.79 176.55 122.7L181.52 124.84Q184.22 126 181.52 127.16Z" fill="#8A919C" class="h1-1"/>
+</g>
+<g class="edge" data-id="e4" data-from="App" data-to="API" data-lines="6">
+<path d="M182.87 178C224.37 178 265.87 178 307.37 178" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h1-0"/>
+<path d="M311.41 179.16L306.44 181.3Q304.31 182.21 304.31 179.9L304.31 176.1Q304.31 173.79 306.44 174.7L311.41 176.84Q314.11 178 311.41 179.16Z" fill="#8A919C" class="h1-1"/>
+</g>
+<g class="edge" data-id="e5" data-from="API" data-to="App" data-lines="7">
+<path d="M312.76 230C271.26 230 229.76 230 188.26 230" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 4.5" class="h1-0"/>
+<path d="M184.22 228.84L189.19 226.7Q191.32 225.79 191.32 228.1L191.32 231.9Q191.32 234.21 189.19 233.3L184.22 231.16Q181.52 230 184.22 228.84Z" fill="#8A919C" class="h1-1"/>
+</g>
+<g class="edge" data-id="e6" data-from="App" data-to="Shopper" data-lines="8">
+<path d="M182.87 282C147.19 282 111.51 282 75.82 282" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.4 4.5" class="h1-0"/>
+<path d="M71.78 280.84L76.75 278.7Q78.88 277.79 78.88 280.1L78.88 283.9Q78.88 286.21 76.75 285.3L71.78 283.16Q69.08 282 71.78 280.84Z" fill="#8A919C" class="h1-1"/>
+</g>
+<g class="edge-label" data-id="e3" data-from="Shopper" data-to="App" data-lines="5">
+<rect x="109.05" y="98" width="35.2" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h1-2 h1-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="126.65" y="114.68">Pay</tspan></text>
+</g>
+<g class="edge-label" data-id="e4" data-from="App" data-to="API" data-lines="6">
+<rect x="194.87" y="150" width="105.89" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h1-2 h1-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="247.81" y="166.68">POST /charges</tspan></text>
+</g>
+<g class="edge-label" data-id="e5" data-from="API" data-to="App" data-lines="7">
+<rect x="204.34" y="202" width="86.94" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h1-2 h1-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="247.81" y="218.68">201 Created</tspan></text>
+</g>
+<g class="edge-label" data-id="e6" data-from="App" data-to="Shopper" data-lines="8">
+<rect x="97.18" y="254" width="58.93" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h1-2 h1-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="126.65" y="270.68">Receipt</tspan></text>
+</g>
+<g class="node" data-id="Shopper" data-lines="2 5 8">
+<path d="M42 16L98.87 16C108.81 16 116.87 24.06 116.87 34L116.87 42C116.87 51.94 108.81 60 98.87 60L42 60C32.06 60 24 51.94 24 42L24 34C24 24.06 32.06 16 42 16Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h1-4 h1-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="70.43" y="43.04">Shopper</tspan></text>
+</g>
+<g class="node" data-id="App" data-lines="3 5 6 7 8">
+<path d="M152.87 16L212.87 16C219.5 16 224.87 21.37 224.87 28L224.87 48C224.87 54.63 219.5 60 212.87 60L152.87 60C146.24 60 140.87 54.63 140.87 48L140.87 28C140.87 21.37 146.24 16 152.87 16Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h1-4 h1-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="182.87" y="43.04">App</tspan></text>
+</g>
+<g class="node" data-id="API" data-lines="4 6 7">
+<path d="M265.28 16L360.23 16C366.86 16 372.23 21.37 372.23 28L372.23 48C372.23 54.63 366.86 60 360.23 60L265.28 60C258.66 60 253.28 54.63 253.28 48L253.28 28C253.28 21.37 258.66 16 265.28 16Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h1-4 h1-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="312.76" y="43.04">Charges API</tspan></text>
+</g>
+<g class="node" data-id="Shopper (end)" data-lines="2 5 8">
+<path d="M42 320L98.87 320C108.81 320 116.87 328.06 116.87 338L116.87 346C116.87 355.94 108.81 364 98.87 364L42 364C32.06 364 24 355.94 24 346L24 338C24 328.06 32.06 320 42 320Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h1-4 h1-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="70.43" y="347.04">Shopper</tspan></text>
+</g>
+<g class="node" data-id="App (end)" data-lines="3 5 6 7 8">
+<path d="M152.87 320L212.87 320C219.5 320 224.87 325.37 224.87 332L224.87 352C224.87 358.63 219.5 364 212.87 364L152.87 364C146.24 364 140.87 358.63 140.87 352L140.87 332C140.87 325.37 146.24 320 152.87 320Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h1-4 h1-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="182.87" y="347.04">App</tspan></text>
+</g>
+<g class="node" data-id="API (end)" data-lines="4 6 7">
+<path d="M265.28 320L360.23 320C366.86 320 372.23 325.37 372.23 332L372.23 352C372.23 358.63 366.86 364 360.23 364L265.28 364C258.66 364 253.28 358.63 253.28 352L253.28 332C253.28 325.37 258.66 320 265.28 320Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h1-4 h1-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h1-3"><tspan x="312.76" y="347.04">Charges API</tspan></text>
+</g>
+</svg>
+</div>
+<div class="stage" data-index="2" data-title="Charge lifecycle" data-w="855.22" data-h="202" hidden>
+<svg class="dia" viewBox="-24 -24 855.22 202" width="855.22" height="202" role="img" aria-label="Charge lifecycle: diagram drawn by Tidemap">
+<g class="edge" data-id="e0" data-from="[*]startroot" data-to="Pending" data-lines="3">
+<path d="M16 80C39.74 80 52.47 80 74.61 80" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M78.65 81.16L73.68 83.3Q71.55 84.21 71.55 81.9L71.55 78.1Q71.55 75.79 73.68 76.7L78.65 78.84Q81.35 80 78.65 81.16Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge" data-id="e1" data-from="Pending" data-to="Paid" data-lines="4">
+<path d="M176 73.4C201.3 68.11 214.77 48 240.61 48C264.59 48 277.45 48 299.83 48" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M303.87 49.16L298.9 51.3Q296.77 52.21 296.77 49.9L296.77 46.1Q296.77 43.79 298.9 44.7L303.87 46.84Q306.57 48 303.87 49.16Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge" data-id="e2" data-from="Pending" data-to="Failed" data-lines="5">
+<path d="M176 86.6C200.38 95.17 214.77 132 240.61 132C280.85 132 300.98 132 341.22 132C379.38 132 399.34 132 435.83 132" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M439.87 133.16L434.9 135.3Q432.77 136.21 432.77 133.9L432.77 130.1Q432.77 127.79 434.9 128.7L439.87 130.84Q442.57 132 439.87 133.16Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge" data-id="e3" data-from="Paid" data-to="Refunded" data-lines="6">
+<path d="M377.22 41.4C421.82 37.18 444.42 22 489.22 22C532.19 22 554.55 22 595.83 22" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M599.87 23.16L594.9 25.3Q592.77 26.21 592.77 23.9L592.77 20.1Q592.77 17.79 594.9 18.7L599.87 20.84Q602.57 22 599.87 23.16Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge" data-id="e4" data-from="Paid" data-to="[*]endroot" data-lines="7">
+<path d="M377.22 54.6C421.82 58.82 444.42 74 489.22 74C558.02 74 592.42 74 661.22 74C708.99 74 733.76 74 779.83 74" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M783.87 75.16L778.9 77.3Q776.77 78.21 776.77 75.9L776.77 72.1Q776.77 69.79 778.9 70.7L783.87 72.84Q786.57 74 783.87 75.16Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge" data-id="e5" data-from="Failed" data-to="[*]endroot" data-lines="8">
+<path d="M537.22 132C586.82 132 611.62 132 661.22 132C709.32 132 735.41 92.26 780.78 79.42" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M785.02 79.57L780.8 82.95Q778.99 84.41 778.37 82.17L777.36 78.52Q776.74 76.29 779.03 76.6L784.39 77.33Q787.31 77.72 785.02 79.57Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge" data-id="e6" data-from="Refunded" data-to="[*]endroot" data-lines="9">
+<path d="M721.22 22C743.86 30.3 759.4 56.93 781.06 67.77" fill="none" stroke="#8A919C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h2-0"/>
+<path d="M784.28 70.37L778.88 70.12Q776.56 70.02 777.58 67.93L779.23 64.52Q780.24 62.43 781.76 64.19L785.3 68.28Q787.22 70.5 784.28 70.37Z" fill="#8A919C" class="h2-1"/>
+</g>
+<g class="edge-label" data-id="e1" data-from="Pending" data-to="Paid" data-lines="4">
+<rect x="211.34" y="36" width="58.53" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h2-2 h2-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="240.61" y="52.68">card ok</tspan></text>
+</g>
+<g class="edge-label" data-id="e2" data-from="Pending" data-to="Failed" data-lines="5">
+<rect x="208" y="120" width="65.22" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h2-2 h2-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="240.61" y="136.68">declined</tspan></text>
+</g>
+<g class="edge-label" data-id="e3" data-from="Paid" data-to="Refunded" data-lines="6">
+<rect x="462.58" y="10" width="53.27" height="24" rx="8" fill="#FFFFFF" stroke="#8A919C" stroke-opacity="0.35" stroke-width="1" class="h2-2 h2-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="13" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="489.22" y="26.68">refund</tspan></text>
+</g>
+<g class="node" data-id="[*]startroot" data-lines="3">
+<path d="M16 80C16 84.42 12.42 88 8 88C3.58 88 0 84.42 0 80C0 75.58 3.58 72 8 72C12.42 72 16 75.58 16 80Z" fill="#8A919C" stroke="#8A919C" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h2-1 h2-0"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="8" y="85.04"></tspan></text>
+</g>
+<g class="node" data-id="Pending" data-lines="3 4 5">
+<path d="M98 58L158 58C167.94 58 176 66.06 176 76L176 84C176 93.94 167.94 102 158 102L98 102C88.06 102 80 93.94 80 84L80 76C80 66.06 88.06 58 98 58Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h2-4 h2-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="128" y="85.04">Pending</tspan></text>
+</g>
+<g class="node" data-id="Paid" data-lines="4 6 7">
+<path d="M323.22 26L359.22 26C369.16 26 377.22 34.06 377.22 44L377.22 52C377.22 61.94 369.16 70 359.22 70L323.22 70C313.28 70 305.22 61.94 305.22 52L305.22 44C305.22 34.06 313.28 26 323.22 26Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h2-4 h2-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="341.22" y="53.04">Paid</tspan></text>
+</g>
+<g class="node" data-id="Failed" data-lines="5 8">
+<path d="M459.22 110L519.22 110C529.16 110 537.22 118.06 537.22 128L537.22 136C537.22 145.94 529.16 154 519.22 154L459.22 154C449.28 154 441.22 145.94 441.22 136L441.22 128C441.22 118.06 449.28 110 459.22 110Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h2-4 h2-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="489.22" y="137.04">Failed</tspan></text>
+</g>
+<g class="node" data-id="Refunded" data-lines="6 9">
+<path d="M619.22 0L703.22 0C713.16 0 721.22 8.06 721.22 18L721.22 26C721.22 35.94 713.16 44 703.22 44L619.22 44C609.28 44 601.22 35.94 601.22 26L601.22 18C601.22 8.06 609.28 0 619.22 0Z" fill="#DCEBFA" stroke="#8FB8E0" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h2-4 h2-5"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="661.22" y="27.04">Refunded</tspan></text>
+</g>
+<g class="node" data-id="[*]endroot" data-lines="7 8 9">
+<path d="M807.22 74C807.22 80.08 802.29 85 796.22 85C790.14 85 785.22 80.08 785.22 74C785.22 67.92 790.14 63 796.22 63C802.29 63 807.22 67.92 807.22 74Z" fill="none" stroke="#8A919C" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" class="h2-0"/>
+<path d="M803.22 74C803.22 77.87 800.08 81 796.22 81C792.35 81 789.22 77.87 789.22 74C789.22 70.13 792.35 67 796.22 67C800.08 67 803.22 70.13 803.22 74Z" fill="#8A919C" stroke="none" class="h2-1"/>
+<text text-anchor="middle" font-family="Inter" font-size="14" font-weight="500" fill="#1F2328" class="h2-3"><tspan x="796.22" y="79.04"></tspan></text>
+</g>
+</svg>
+</div>
+          <!-- /build:hero -->
+        </div>
+        <div class="pill" role="toolbar" aria-label="Canvas">
+          <button class="ctl" type="button" id="zoom-out" aria-label="Zoom out" title="Zoom out  −"><svg class="i"><use href="#i-minus"/></svg></button>
+          <output class="zoom" id="zoom" aria-label="Zoom">100%</output>
+          <button class="ctl" type="button" id="zoom-in" aria-label="Zoom in" title="Zoom in  +"><svg class="i"><use href="#i-plus"/></svg></button>
+          <span class="div" aria-hidden="true"></span>
+          <button class="ctl" type="button" id="fit" aria-label="Fit diagram" title="Fit  F"><svg class="i"><use href="#i-fit"/></svg></button>
+          <button class="ctl" type="button" id="src-toggle" aria-label="Show source" aria-pressed="false" aria-controls="source" title="Source"><svg class="i"><use href="#i-code"/></svg></button>
+          <a class="ctl" id="export" href="diagrams/hero-0.svg" download="request-path.svg" aria-label="Export this diagram as SVG" title="Export SVG"><svg class="i"><use href="#i-export"/></svg></a>
+        </div>
+        <aside class="source" id="source" aria-label="Source">
+          <div class="src-head">
+            <h3>Source</h3>
+            <span class="tab">Diagram</span>
+            <button class="ctl" type="button" id="src-close" aria-label="Hide source"><svg class="i"><use href="#i-close"/></svg></button>
+          </div>
+          <!-- build:hero-source -->
+<ol class="code" data-index="0" aria-label="Source of Request path">
+<li data-line="1"><span class="ln" aria-hidden="true">1</span><code><span class="tk-k">flowchart</span> <span class="tk-k">LR</span></code></li>
+<li data-line="2"><span class="ln" aria-hidden="true">2</span><code>  Client([Client]) <span class="tk-o">--&gt;</span> Gateway[API gateway]</code></li>
+<li data-line="3"><span class="ln" aria-hidden="true">3</span><code>  Gateway <span class="tk-o">--&gt;</span> Auth{Token valid?}</code></li>
+<li data-line="4"><span class="ln" aria-hidden="true">4</span><code>  Auth <span class="tk-o">--&gt;</span><span class="tk-s">|No|</span> Reject([401])</code></li>
+<li data-line="5"><span class="ln" aria-hidden="true">5</span><code>  Auth <span class="tk-o">--&gt;</span><span class="tk-s">|Yes|</span> Charges[Charges API]</code></li>
+<li data-line="6"><span class="ln" aria-hidden="true">6</span><code>  Charges <span class="tk-o">--&gt;</span> Ledger[(Ledger)]</code></li>
+<li data-line="7"><span class="ln" aria-hidden="true">7</span><code>  Charges <span class="tk-o">--&gt;</span> Events[[Event bus]]</code></li>
+</ol>
+<ol class="code" data-index="1" aria-label="Source of Checkout" hidden>
+<li data-line="1"><span class="ln" aria-hidden="true">1</span><code><span class="tk-k">sequenceDiagram</span></code></li>
+<li data-line="2"><span class="ln" aria-hidden="true">2</span><code>  <span class="tk-k">actor</span> Shopper</code></li>
+<li data-line="3"><span class="ln" aria-hidden="true">3</span><code>  <span class="tk-k">participant</span> App</code></li>
+<li data-line="4"><span class="ln" aria-hidden="true">4</span><code>  <span class="tk-k">participant</span> API <span class="tk-k">as</span> Charges API</code></li>
+<li data-line="5"><span class="ln" aria-hidden="true">5</span><code>  Shopper<span class="tk-o">-&gt;&gt;</span>App: Pay</code></li>
+<li data-line="6"><span class="ln" aria-hidden="true">6</span><code>  App<span class="tk-o">-&gt;&gt;</span>API: POST /charges</code></li>
+<li data-line="7"><span class="ln" aria-hidden="true">7</span><code>  API<span class="tk-o">--&gt;&gt;</span>App: 201 Created</code></li>
+<li data-line="8"><span class="ln" aria-hidden="true">8</span><code>  App<span class="tk-o">--&gt;&gt;</span>Shopper: Receipt</code></li>
+</ol>
+<ol class="code" data-index="2" aria-label="Source of Charge lifecycle" hidden>
+<li data-line="1"><span class="ln" aria-hidden="true">1</span><code><span class="tk-k">stateDiagram-v2</span></code></li>
+<li data-line="2"><span class="ln" aria-hidden="true">2</span><code>  <span class="tk-k">direction</span> <span class="tk-k">LR</span></code></li>
+<li data-line="3"><span class="ln" aria-hidden="true">3</span><code>  <span class="tk-o">[*]</span> <span class="tk-o">--&gt;</span> Pending</code></li>
+<li data-line="4"><span class="ln" aria-hidden="true">4</span><code>  Pending <span class="tk-o">--&gt;</span> Paid: card ok</code></li>
+<li data-line="5"><span class="ln" aria-hidden="true">5</span><code>  Pending <span class="tk-o">--&gt;</span> Failed: declined</code></li>
+<li data-line="6"><span class="ln" aria-hidden="true">6</span><code>  Paid <span class="tk-o">--&gt;</span> Refunded: refund</code></li>
+<li data-line="7"><span class="ln" aria-hidden="true">7</span><code>  Paid <span class="tk-o">--&gt;</span> <span class="tk-o">[*]</span></code></li>
+<li data-line="8"><span class="ln" aria-hidden="true">8</span><code>  Failed <span class="tk-o">--&gt;</span> <span class="tk-o">[*]</span></code></li>
+<li data-line="9"><span class="ln" aria-hidden="true">9</span><code>  Refunded <span class="tk-o">--&gt;</span> <span class="tk-o">[*]</span></code></li>
+</ol>
+          <!-- /build:hero-source -->
+        </aside>
+      </div>
+      <p class="vh" aria-live="polite" id="announce"></p>
+    </div>
+    <figcaption id="demo-cap">
+      <span>Three diagrams from one Markdown file, as Tidemap's engine exports them.</span>
+      <span class="pointer-only">Click a node to find its line. <kbd>[</kbd> <kbd>]</kbd> switch diagrams, <kbd>F</kbd> fits.</span>
+      <span class="touch-only">Tap a node to find its line. Swipe sideways to pan.</span>
+    </figcaption>
+  </figure>
+
+  <section class="section wrap" id="speed" aria-labelledby="speed-title">
+    <div class="section-head">
+      <h2 id="speed-title">Big diagrams stay quick.</h2>
+      <p>Measured on generated diagrams of 10,000 nodes, from source text to a scene ready to paint.</p>
+    </div>
+    <div class="bench">
+      <div>
+        <p class="answer" aria-label="23 milliseconds"><span class="v">23</span><span class="u">ms</span></p>
+        <p class="answer-note">for a 10,000-node chain or tree. Denser graphs take longer, and the bars show how much.</p>
+      </div>
+      <div>
+        <ul class="bars" role="list" aria-label="Time for 10,000-node diagrams by shape">
+          <li class="pick"><span class="k"><b>Tree</b>9,999 edges</span><span class="track"><span class="fill" style="width:6.72%"></span></span><span class="v">22.6 <small>ms</small></span></li>
+          <li class="pick"><span class="k"><b>Chain</b>9,999 edges</span><span class="track"><span class="fill" style="width:6.81%"></span></span><span class="v">22.9 <small>ms</small></span></li>
+          <li><span class="k"><b>Subgraphs</b>10,600 edges</span><span class="track"><span class="fill" style="width:32.32%"></span></span><span class="v">108.7 <small>ms</small></span></li>
+          <li><span class="k"><b>Dense layers</b>19,960 edges</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="v">336.3 <small>ms</small></span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="bench-note">Parse, layout and scene build together. Best of 5 runs, release build, Intel Core i7-14700K (20 cores; layout runs on several threads). The engine only: window start-up and painting are not counted. Reproduce with <code>cargo native bench</code>; smaller sizes are in the <a href="guide/#performance">guide</a>.</p>
+  </section>
+
+  <section class="section wrap" id="markdown" aria-labelledby="markdown-title">
+    <div class="split">
+      <div>
+        <div class="section-head">
+          <h2 id="markdown-title">Your README, as a page.</h2>
+          <p>Markdown files open rendered, with every Mermaid block drawn where it sits in the text.</p>
+        </div>
+        <dl class="points" style="margin-top:var(--s8)">
+          <div><dt>Everything a README holds</dt><dd>Headings, lists, tables, quotes, code, links and selectable text.</dd></div>
+          <div><dt>Many diagrams in one file</dt><dd>The file tree shows how many diagrams each Markdown file holds. <kbd>[</kbd> and <kbd>]</kbd> step through them.</dd></div>
+          <div><dt>Page or canvas</dt><dd>Double-click a diagram to open it on the canvas. <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>M</kbd> switches back.</dd></div>
+        </dl>
+      </div>
+      <figure>
+        <div class="shot">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/shots/page-dark-960.webp 960w, assets/shots/page-dark-1440.webp 1440w" sizes="(min-width: 960px) 680px, 100vw">
+            <img src="assets/shots/page-light-1440.webp" srcset="assets/shots/page-light-960.webp 960w, assets/shots/page-light-1440.webp 1440w" sizes="(min-width: 960px) 680px, 100vw" width="1440" height="900" loading="lazy" decoding="async" alt="Tidemap showing welcome.md as a page: a file tree of 23 example files on the left, and the document with a heading, a paragraph, a flowchart and a sequence diagram drawn inline.">
+          </picture>
+        </div>
+        <figcaption class="shot-cap">A Markdown file with three diagrams, opened from the examples folder.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section wrap" id="editor" aria-labelledby="editor-title">
+    <div class="section-head">
+      <h2 id="editor-title">Edit the source. Keep the picture.</h2>
+      <p>Open the source beside the canvas and the diagram follows every keystroke.</p>
+    </div>
+    <dl class="points two" style="margin-top:var(--s12)">
+      <div><dt>Live preview</dt><dd>The picture updates as you type. A syntax error leaves the last good picture on screen, so the canvas never goes blank.</dd></div>
+      <div><dt>Node to line, line to node</dt><dd>Click a node to light up its neighbours and jump to its source line, or click a line to find its node.</dd></div>
+      <div><dt>Big files stay light</dt><dd>Only visible lines are laid out, so typing in a 400,000-line file costs what it costs in a 10-line one.</dd></div>
+      <div><dt>A real editor</dt><dd>Undo and redo, word and line selection, multi-line indent, line move and delete, list continuation, find with next and previous.</dd></div>
+      <div><dt>Find inside diagrams</dt><dd><kbd>Ctrl</kbd> <kbd>F</kbd> searches the labels of the open diagram, or the whole page for a Markdown file.</dd></div>
+      <div><dt>Export</dt><dd>SVG, or PNG at 1x to 3x, in the light or dark appearance you are looking at.</dd></div>
+    </dl>
+  </section>
+
+  <section class="section wrap" id="diagrams" aria-labelledby="diagrams-title">
+    <div class="section-head">
+      <h2 id="diagrams-title">22 diagram families. One engine.</h2>
+      <p>Each picture is an SVG exported by Tidemap from its examples folder. Open one to see it larger, with its source.</p>
+    </div>
+    <!-- build:gallery -->
+<ul class="gallery" role="list">
+<li class="tile" id="flowchart">
+  <button type="button" class="tile-hit" data-slug="flowchart" aria-haspopup="dialog" aria-label="Flowchart diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/flowchart.svg" width="400" height="824" loading="lazy" decoding="async" alt="Flowchart: Markdown and Mermaid files feed a project index, search and the source editor, which hands off to an isolated renderer and local recovery."></span>
+  </button>
+  <p class="tile-name">Flowchart</p>
+  <p class="tile-key"><code>flowchart</code></p>
+  <template><pre><code>flowchart TB
+  subgraph Workspace[Your local workspace]
+    Files[(Markdown and Mermaid)] --&gt; Index[Project index]
+    Index --&gt; Search[Find a diagram]
+    Search --&gt; Editor[Source editor]
+  end
+  Editor --&gt; Helper[Isolated renderer]
+  Helper --&gt; Preview[Diagram canvas]
+  Editor --&gt; Recovery[(Local recovery)]
+  Preview --&gt; Export[SVG or PNG]</code></pre></template>
+</li>
+<li class="tile" id="sequence">
+  <button type="button" class="tile-hit" data-slug="sequence" aria-haspopup="dialog" aria-label="Sequence diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/sequence.svg" width="509.51" height="816" loading="lazy" decoding="async" alt="Sequence diagram: a user, a web app and a database exchange numbered messages inside loop and alt frames, with notes."></span>
+  </button>
+  <p class="tile-name">Sequence</p>
+  <p class="tile-key"><code>sequenceDiagram</code></p>
+  <template><pre><code>sequenceDiagram
+    autonumber
+    participant U as User
+    participant W as Web App
+    actor DB as Database
+    U-&gt;&gt;+W: Open dashboard
+    W-&gt;&gt;+DB: SELECT widgets
+    DB--&gt;&gt;-W: rows
+    W--&gt;&gt;-U: Rendered page
+    loop Every minute
+        W-&gt;&gt;W: refresh cache
+    end
+    alt cache hit
+        W-)U: push update
+    else miss
+        W-xDB: timeout
+    end
+    Note right of U: User sees data
+    Note over W,DB: Shared note</code></pre></template>
+</li>
+<li class="tile" id="class">
+  <button type="button" class="tile-hit" data-slug="class" aria-haspopup="dialog" aria-label="Class diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/class.svg" width="459.18" height="740" loading="lazy" decoding="async" alt="Class diagram: an abstract Animal with Dog and Cat subclasses, attributes, methods and UML relation markers."></span>
+  </button>
+  <p class="tile-name">Class</p>
+  <p class="tile-key"><code>classDiagram</code></p>
+  <template><pre><code>classDiagram
+    class Animal {
+        &lt;&lt;abstract&gt;&gt;
+        +String name
+        +int age
+        +eat() void
+        +sleep() void
+    }
+    class Dog {
+        +bark() void
+    }
+    class Cat
+    Animal &lt;|-- Dog
+    Animal &lt;|-- Cat
+    class Owner {
+        +String name
+    }
+    Owner &quot;1&quot; --&gt; &quot;*&quot; Dog : owns
+    Dog *-- Tail
+    Dog o-- Collar : wears
+    Cat ..&gt; Food : eats
+    Cat ..|&gt; Pet</code></pre></template>
+</li>
+<li class="tile" id="state">
+  <button type="button" class="tile-hit" data-slug="state" aria-haspopup="dialog" aria-label="State diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/state.svg" width="1212.26" height="373" loading="lazy" decoding="async" alt="State diagram with a composite Active state, a choice, a fork and labelled transitions."></span>
+  </button>
+  <p class="tile-name">State</p>
+  <p class="tile-key"><code>stateDiagram-v2</code></p>
+  <template><pre><code>stateDiagram-v2
+    direction LR
+    [*] --&gt; Idle
+    Idle --&gt; Active : start
+    state Active {
+        [*] --&gt; Running
+        Running --&gt; Paused : pause
+        Paused --&gt; Running : resume
+        Running --&gt; [*]
+    }
+    state check &lt;&lt;choice&gt;&gt;
+    Active --&gt; check
+    check --&gt; Done : ok
+    check --&gt; Idle : retry
+    state fork_state &lt;&lt;fork&gt;&gt;
+    Done --&gt; fork_state
+    fork_state --&gt; Log
+    fork_state --&gt; Notify
+    note right of Done : All finished
+    Done --&gt; [*]</code></pre></template>
+</li>
+<li class="tile" id="er">
+  <button type="button" class="tile-hit" data-slug="er" aria-haspopup="dialog" aria-label="Entity relationship diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/er.svg" width="463.22" height="480" loading="lazy" decoding="async" alt="Entity relationship diagram: CUSTOMER, ORDER, PRODUCT and LINE_ITEM tables with keys and crow&#x27;s foot cardinalities."></span>
+  </button>
+  <p class="tile-name">Entity relationship</p>
+  <p class="tile-key"><code>erDiagram</code></p>
+  <template><pre><code>erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    PRODUCT ||--o{ LINE_ITEM : &quot;ordered in&quot;
+    CUSTOMER {
+        int id PK
+        string name
+        string email UK
+    }
+    ORDER {
+        int id PK
+        int customer_id FK
+        date placed_at
+    }
+    PRODUCT {
+        int id PK
+        string title
+        float price &quot;in USD&quot;
+    }</code></pre></template>
+</li>
+<li class="tile" id="gantt">
+  <button type="button" class="tile-hit" data-slug="gantt" aria-haspopup="dialog" aria-label="Gantt diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/gantt.svg" width="1035.42" height="373.3" loading="lazy" decoding="async" alt="Gantt chart of a release plan: research, wireframes, backend and frontend tasks, a blocker and a release milestone."></span>
+  </button>
+  <p class="tile-name">Gantt</p>
+  <p class="tile-key"><code>gantt</code></p>
+  <template><pre><code>gantt
+    title Release plan
+    dateFormat YYYY-MM-DD
+    section Design
+    Research        :done, a1, 2024-01-01, 14d
+    Wireframes      :active, a2, after a1, 10d
+    section Build
+    Backend         :b1, after a2, 30d
+    Frontend        :b2, after a2, 25d
+    Launch blocker  :crit, b3, after b2, 5d
+    Release         :milestone, m1, after b1, 0d</code></pre></template>
+</li>
+<li class="tile" id="pie">
+  <button type="button" class="tile-hit" data-slug="pie" aria-haspopup="dialog" aria-label="Pie diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/pie.svg" width="517.5" height="426.8" loading="lazy" decoding="async" alt="Pie chart of pets adopted: dogs 73%, cats 16%, birds 8%, rats 3%."></span>
+  </button>
+  <p class="tile-name">Pie</p>
+  <p class="tile-key"><code>pie</code></p>
+  <template><pre><code>pie showData title Pets adopted
+    &quot;Dogs&quot; : 386
+    &quot;Cats&quot; : 85
+    &quot;Rats&quot; : 15
+    &quot;Birds&quot; : 40</code></pre></template>
+</li>
+<li class="tile" id="mindmap">
+  <button type="button" class="tile-hit" data-slug="mindmap" aria-haspopup="dialog" aria-label="Mindmap diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/mindmap.svg" width="510.58" height="596" loading="lazy" decoding="async" alt="Mindmap of Tidemap branching into diagrams, editor and export."></span>
+  </button>
+  <p class="tile-name">Mindmap</p>
+  <p class="tile-key"><code>mindmap</code></p>
+  <template><pre><code>mindmap
+  root((Tidemap))
+    Diagrams
+      Flowchart
+      Sequence
+      Class
+    Editor
+      Source
+      Find
+    Export
+      SVG
+      PNG</code></pre></template>
+</li>
+<li class="tile" id="timeline">
+  <button type="button" class="tile-hit" data-slug="timeline" aria-haspopup="dialog" aria-label="Timeline diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/timeline.svg" width="1032" height="349.8" loading="lazy" decoding="async" alt="Timeline of social media from 2002 to 2006 in two sections."></span>
+  </button>
+  <p class="tile-name">Timeline</p>
+  <p class="tile-key"><code>timeline</code></p>
+  <template><pre><code>timeline
+    title History of social media
+    section Early
+        2002 : LinkedIn
+        2004 : Facebook : Google
+    section Mobile era
+        2005 : YouTube
+        2006 : Twitter : Something with a much longer description</code></pre></template>
+</li>
+<li class="tile" id="journey">
+  <button type="button" class="tile-hit" data-slug="journey" aria-haspopup="dialog" aria-label="User journey diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/journey.svg" width="830.34" height="451.3" loading="lazy" decoding="async" alt="User journey of a working day, each task scored by two actors."></span>
+  </button>
+  <p class="tile-name">User journey</p>
+  <p class="tile-key"><code>journey</code></p>
+  <template><pre><code>journey
+    title My working day
+    section Go to work
+      Make tea: 5: Me
+      Go upstairs: 3: Me
+      Do work: 1: Me, Cat
+    section Go home
+      Go downstairs: 5: Me
+      Sit down: 4: Me</code></pre></template>
+</li>
+<li class="tile" id="gitgraph">
+  <button type="button" class="tile-hit" data-slug="gitgraph" aria-haspopup="dialog" aria-label="Git graph diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/gitgraph.svg" width="652.44" height="242" loading="lazy" decoding="async" alt="Git graph with main, develop and hotfix branches, a tag, merges and a reverted commit."></span>
+  </button>
+  <p class="tile-name">Git graph</p>
+  <p class="tile-key"><code>gitGraph</code></p>
+  <template><pre><code>gitGraph
+    commit id: &quot;init&quot;
+    commit
+    branch develop
+    checkout develop
+    commit id: &quot;feature&quot; tag: &quot;v0.1&quot;
+    commit
+    checkout main
+    commit type: HIGHLIGHT
+    merge develop id: &quot;release&quot;
+    branch hotfix
+    commit type: REVERSE
+    checkout main
+    commit</code></pre></template>
+</li>
+<li class="tile" id="quadrant">
+  <button type="button" class="tile-hit" data-slug="quadrant" aria-haspopup="dialog" aria-label="Quadrant chart diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/quadrant.svg" width="631" height="588" loading="lazy" decoding="async" alt="Quadrant chart placing three campaigns by reach and engagement."></span>
+  </button>
+  <p class="tile-name">Quadrant chart</p>
+  <p class="tile-key"><code>quadrantChart</code></p>
+  <template><pre><code>quadrantChart
+    title Reach and engagement of campaigns
+    x-axis Low Reach --&gt; High Reach
+    y-axis Low Engagement --&gt; High Engagement
+    quadrant-1 We should expand
+    quadrant-2 Need to promote
+    quadrant-3 Re-evaluate
+    quadrant-4 May be improved
+    Campaign A: [0.3, 0.6]
+    Campaign B: [0.45, 0.23]
+    Campaign C: [0.57, 0.69]</code></pre></template>
+</li>
+<li class="tile" id="xychart">
+  <button type="button" class="tile-hit" data-slug="xychart" aria-haspopup="dialog" aria-label="XY chart diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/xychart.svg" width="725.5" height="488" loading="lazy" decoding="async" alt="XY chart of monthly sales revenue from January to June, bars with a line."></span>
+  </button>
+  <p class="tile-name">XY chart</p>
+  <p class="tile-key"><code>xychart-beta</code></p>
+  <template><pre><code>xychart-beta
+    title &quot;Sales Revenue&quot;
+    x-axis [jan, feb, mar, apr, may, jun]
+    y-axis &quot;Revenue (USD)&quot; 4000 --&gt; 11000
+    bar [5000, 6000, 7500, 8200, 9500, 10500]
+    line [5000, 6000, 7500, 8200, 9500, 10500]</code></pre></template>
+</li>
+<li class="tile" id="sankey">
+  <button type="button" class="tile-hit" data-slug="sankey" aria-haspopup="dialog" aria-label="Sankey diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/sankey.svg" width="598" height="448" loading="lazy" decoding="async" alt="Sankey diagram of energy flowing from coal, solar and gas through electricity and heating to industry, homes and losses."></span>
+  </button>
+  <p class="tile-name">Sankey</p>
+  <p class="tile-key"><code>sankey-beta</code></p>
+  <template><pre><code>sankey-beta
+Coal,Electricity,40
+Gas,Electricity,30
+Solar,Electricity,20
+Electricity,Homes,45
+Electricity,Industry,35
+Electricity,Losses,10
+Gas,Heating,25
+Heating,Homes,25</code></pre></template>
+</li>
+<li class="tile" id="c4">
+  <button type="button" class="tile-hit" data-slug="c4" aria-haspopup="dialog" aria-label="C4 diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/c4.svg" width="400.44" height="666" loading="lazy" decoding="async" alt="C4 system context diagram of an internet banking system, its customer, mainframe and e-mail system."></span>
+  </button>
+  <p class="tile-name">C4</p>
+  <p class="tile-key"><code>C4Context</code></p>
+  <template><pre><code>C4Context
+    title System Context diagram for Internet Banking System
+    Person(customer, &quot;Personal Banking Customer&quot;, &quot;A customer of the bank&quot;)
+    Enterprise_Boundary(b0, &quot;Bank&quot;) {
+        System(banking, &quot;Internet Banking System&quot;, &quot;Lets customers view their accounts&quot;)
+        SystemDb(db, &quot;Mainframe&quot;, &quot;Stores core data&quot;)
+    }
+    System_Ext(email, &quot;E-mail System&quot;, &quot;Sends e-mails&quot;)
+    Rel(customer, banking, &quot;Uses&quot;, &quot;HTTPS&quot;)
+    Rel(banking, db, &quot;Reads from&quot;)
+    Rel(banking, email, &quot;Sends e-mails using&quot;)</code></pre></template>
+</li>
+<li class="tile" id="architecture">
+  <button type="button" class="tile-hit" data-slug="architecture" aria-haspopup="dialog" aria-label="Architecture diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/architecture.svg" width="536" height="314" loading="lazy" decoding="async" alt="Architecture diagram: a gateway, a server, a database and storage inside an API group."></span>
+  </button>
+  <p class="tile-name">Architecture</p>
+  <p class="tile-key"><code>architecture-beta</code></p>
+  <template><pre><code>architecture-beta
+    group api(cloud)[API]
+    service db(database)[Database] in api
+    service disk1(disk)[Storage] in api
+    service server(server)[Server] in api
+    service gateway(internet)[Gateway]
+    db:L -- R:server
+    disk1:T -- B:server
+    gateway:R --&gt; L:server</code></pre></template>
+</li>
+<li class="tile" id="block">
+  <button type="button" class="tile-hit" data-slug="block" aria-haspopup="dialog" aria-label="Block diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/block.svg" width="444.83" height="238" loading="lazy" decoding="async" alt="Block diagram with columns, a spanning block, a rounded block and a decision."></span>
+  </button>
+  <p class="tile-name">Block</p>
+  <p class="tile-key"><code>block-beta</code></p>
+  <template><pre><code>block-beta
+    columns 3
+    a[&quot;Frontend&quot;] b:2
+    c((&quot;Cache&quot;)) space d{&quot;Decide&quot;}
+    a --&gt; c
+    b --&gt; d</code></pre></template>
+</li>
+<li class="tile" id="requirement">
+  <button type="button" class="tile-hit" data-slug="requirement" aria-haspopup="dialog" aria-label="Requirement diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/requirement.svg" width="256.15" height="617" loading="lazy" decoding="async" alt="Requirement diagram: a test entity satisfies a requirement that contains a functional requirement."></span>
+  </button>
+  <p class="tile-name">Requirement</p>
+  <p class="tile-key"><code>requirementDiagram</code></p>
+  <template><pre><code>requirementDiagram
+    requirement test_req {
+        id: 1
+        text: the test text.
+        risk: high
+        verifymethod: test
+    }
+    functionalRequirement login_req {
+        id: 1.1
+        text: users can log in
+        risk: medium
+        verifymethod: demonstration
+    }
+    element test_entity {
+        type: simulation
+    }
+    test_entity - satisfies -&gt; test_req
+    test_req - contains -&gt; login_req</code></pre></template>
+</li>
+<li class="tile" id="packet">
+  <button type="button" class="tile-hit" data-slug="packet" aria-haspopup="dialog" aria-label="Packet diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/packet.svg" width="712" height="328.8" loading="lazy" decoding="async" alt="Packet diagram of a TCP header: ports, sequence and acknowledgment numbers, flags and window."></span>
+  </button>
+  <p class="tile-name">Packet</p>
+  <p class="tile-key"><code>packet-beta</code></p>
+  <template><pre><code>packet-beta
+    title TCP Packet
+    0-15: &quot;Source Port&quot;
+    16-31: &quot;Destination Port&quot;
+    32-63: &quot;Sequence Number&quot;
+    64-95: &quot;Acknowledgment Number&quot;
+    96-99: &quot;Offset&quot;
+    100-105: &quot;Reserved&quot;
+    106-111: &quot;Flags&quot;
+    112-127: &quot;Window&quot;</code></pre></template>
+</li>
+<li class="tile" id="kanban">
+  <button type="button" class="tile-hit" data-slug="kanban" aria-haspopup="dialog" aria-label="Kanban diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/kanban.svg" width="826" height="261" loading="lazy" decoding="async" alt="Kanban board with Todo, In progress and Done columns."></span>
+  </button>
+  <p class="tile-name">Kanban</p>
+  <p class="tile-key"><code>kanban</code></p>
+  <template><pre><code>kanban
+  todo[Todo]
+    t1[Create documentation]
+    t2[Create blog about the new diagram types]
+  doing[In progress]
+    t3[Render all diagram types natively]
+  done[Done]
+    t4[Ship 0.3.0]</code></pre></template>
+</li>
+<li class="tile" id="radar">
+  <button type="button" class="tile-hit" data-slug="radar" aria-haspopup="dialog" aria-label="Radar diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/radar.svg" width="624.28" height="513.3" loading="lazy" decoding="async" alt="Radar chart comparing two students&#x27; grades in five subjects."></span>
+  </button>
+  <p class="tile-name">Radar</p>
+  <p class="tile-key"><code>radar-beta</code></p>
+  <template><pre><code>radar-beta
+    title Grades
+    axis m[&quot;Math&quot;], s[&quot;Science&quot;], e[&quot;English&quot;], h[&quot;History&quot;], a[&quot;Art&quot;]
+    curve a[&quot;Alice&quot;]{85, 90, 80, 70, 60}
+    curve b[&quot;Bob&quot;]{70, 75, 85, 90, 95}
+    max 100</code></pre></template>
+</li>
+<li class="tile" id="treemap">
+  <button type="button" class="tile-hit" data-slug="treemap" aria-haspopup="dialog" aria-label="Treemap diagram, open larger">
+    <span class="tile-canvas"><img src="diagrams/treemap.svg" width="864" height="564" loading="lazy" decoding="async" alt="Treemap of products and services by size."></span>
+  </button>
+  <p class="tile-name">Treemap</p>
+  <p class="tile-key"><code>treemap-beta</code></p>
+  <template><pre><code>treemap-beta
+&quot;Products&quot;
+    &quot;Hardware&quot;
+        &quot;Laptops&quot;: 40
+        &quot;Phones&quot;: 30
+    &quot;Software&quot;: 35
+&quot;Services&quot;
+    &quot;Support&quot;: 20
+    &quot;Consulting&quot;: 25</code></pre></template>
+</li>
+</ul>
+    <!-- /build:gallery -->
+    <p class="limits">Not drawn yet: zenuml, venn, ishikawa and any other keyword show a "not supported" card, and the source stays editable. <code>%%{init}%%</code> themes are ignored and layouts differ from Mermaid.js; there is no JavaScript fallback. The <a href="guide/#syntax">syntax notes</a> list what each family reads.</p>
+  </section>
+
+  <section class="section wrap" id="keyboard" aria-labelledby="keyboard-title">
+    <div class="split flip">
+      <div>
+        <div class="section-head">
+          <h2 id="keyboard-title">Keyboard first.</h2>
+          <p>Every command has a shortcut or a row in the palette. Single keys act on the canvas whenever you are not typing.</p>
+        </div>
+        <table class="keys" style="margin-top:var(--s8)">
+          <caption class="vh">Common shortcuts</caption>
+          <tbody>
+            <tr><th scope="row">Find a file or diagram</th><td><kbd>Ctrl</kbd> <kbd>P</kbd></td></tr>
+            <tr><th scope="row">Run any command</th><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></td></tr>
+            <tr><th scope="row">Show or hide source</th><td><kbd>Ctrl</kbd> <kbd>E</kbd></td></tr>
+            <tr><th scope="row">Previous or next diagram</th><td><kbd>[</kbd> <kbd>]</kbd></td></tr>
+            <tr><th scope="row">Fit the diagram</th><td><kbd>F</kbd></td></tr>
+            <tr><th scope="row">Page or diagram</th><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>M</kbd></td></tr>
+            <tr><th scope="row">Export</th><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>X</kbd></td></tr>
+            <tr><th scope="row">Every shortcut</th><td><kbd>Ctrl</kbd> <kbd>/</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure>
+        <div class="shot">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/shots/palette-dark-960.webp 960w, assets/shots/palette-dark-1440.webp 1440w" sizes="(min-width: 960px) 680px, 100vw">
+            <img src="assets/shots/palette-light-1440.webp" srcset="assets/shots/palette-light-960.webp 960w, assets/shots/palette-light-1440.webp 1440w" sizes="(min-width: 960px) 680px, 100vw" width="1440" height="900" loading="lazy" decoding="async" alt="Tidemap's command palette open over a flowchart, listing commands such as Switch project, Save and Show or hide source with their shortcuts.">
+          </picture>
+        </div>
+        <figcaption class="shot-cap">The command palette. Type <kbd>&gt;</kbd> in the file finder to reach it.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section wrap" id="local" aria-labelledby="local-title">
+    <div class="section-head">
+      <h2 id="local-title">Your files stay on your disk.</h2>
+      <p>Tidemap reads and writes the files you open. That is all it touches.</p>
+    </div>
+    <dl class="points two" style="margin-top:var(--s12)">
+      <div><dt>No network code</dt><dd>The app has no HTTP client. Remote images in Markdown are not fetched.</dd></div>
+      <div><dt>Saves that check first</dt><dd>Every save is atomic. If the file changed on disk since you opened it, Tidemap stops and offers to compare, reload or save a copy.</dd></div>
+      <div><dt>Crash recovery</dt><dd>Unsaved edits are journalled on your machine and offered back after a crash.</dd></div>
+      <div><dt>Autosave, if you want it</dt><dd>Turn it on in Settings and Tidemap saves after a pause. Conflicts always ask first.</dd></div>
+      <div><dt>Nothing to install</dt><dd>One executable in an archive. No installer, no account, no background service.</dd></div>
+      <div><dt>Your colours</dt><dd>The palette and the geometry live in <code>style.json</code> and reload while the app runs.</dd></div>
+    </dl>
+  </section>
+
+  <section class="section wrap" id="download" aria-labelledby="download-title">
+    <div class="download-head">
+      <img class="mark" src="assets/mark.svg" width="112" height="112" alt="" loading="lazy" decoding="async">
+      <div class="section-head">
+        <h2 id="download-title">Download Tidemap 0.4.0</h2>
+        <p>Released 20 November 2026. <a href="https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.4.0">Release notes</a></p>
+      </div>
+    </div>
+    <ul class="platforms" role="list">
+      <li class="platform" data-os="windows">
+        <div>
+          <h3>Windows <span class="yours" hidden>Your system</span></h3>
+          <p><span class="meta">x86_64 · .zip · 18.5 MB.</span> Unzip and run <code>Tidemap.exe</code>.</p>
+        </div>
+        <a class="btn soft" href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-pc-windows-msvc.zip">Download .zip</a>
+      </li>
+      <li class="platform" data-os="mac-arm">
+        <div>
+          <h3>macOS, Apple silicon <span class="yours" hidden>Your system</span></h3>
+          <p><span class="meta">aarch64 · .tar.gz · 7.2 MB.</span> Extract and run <code>tidemap</code>. The app is not signed yet: the first time, right-click it and choose Open.</p>
+        </div>
+        <a class="btn soft" href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-aarch64-apple-darwin.tar.gz">Download .tar.gz</a>
+      </li>
+      <li class="platform" data-os="mac-intel">
+        <div>
+          <h3>macOS, Intel <span class="yours" hidden>Your system</span></h3>
+          <p><span class="meta">x86_64 · .tar.gz · 7.5 MB.</span> Extract and run <code>tidemap</code>. Not signed yet: right-click, Open, the first time.</p>
+        </div>
+        <a class="btn soft" href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-apple-darwin.tar.gz">Download .tar.gz</a>
+      </li>
+      <li class="platform" data-os="linux">
+        <div>
+          <h3>Linux <span class="yours" hidden>Your system</span></h3>
+          <p><span class="meta">x86_64 · .tar.gz · 10.9 MB.</span> Extract and run <code>tidemap</code>. File dialogs need GTK 3; a <code>.desktop</code> file and an icon are included.</p>
+        </div>
+        <a class="btn soft" href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz">Download .tar.gz</a>
+      </li>
+    </ul>
+    <p class="verify">Every archive has a <code>.sha256</code> file beside it on the release page. The guide shows <a href="guide/#install">how to check it</a> and <a href="guide/#build">how to build from source</a>.</p>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <p>Tidemap 0.4.0. Set in Inter and IBM Plex Mono.</p>
+    <nav aria-label="Footer">
+      <a href="guide/">Guide</a>
+      <a href="guide/#faq">FAQ</a>
+      <a href="https://github.com/zokirjonkodirov/tidemap/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/zokirjonkodirov/tidemap">GitHub</a>
+      <a href="llms.txt">llms.txt</a>
+    </nav>
+  </div>
+</footer>
+
+<dialog class="viewer" id="viewer" aria-labelledby="viewer-title">
+  <div class="viewer-head">
+    <h2 id="viewer-title">Diagram</h2>
+    <code id="viewer-key"></code>
+    <button class="ctl" type="button" id="viewer-close" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="viewer-body">
+    <div class="viewer-canvas"><img id="viewer-img" alt=""></div>
+    <div class="viewer-src">
+      <div class="viewer-src-head"><span>Source</span><button class="btn quiet" type="button" id="copy" style="min-height:36px;padding:0 var(--s3)"><svg class="i"><use href="#i-copy"/></svg><span id="copy-label">Copy</span></button></div>
+      <div id="viewer-src"></div>
+    </div>
+  </div>
+  <div class="viewer-foot">
+    <span class="num" id="viewer-pos" aria-live="polite"></span>
+    <button class="ctl" type="button" id="viewer-prev" aria-label="Previous diagram" title="Previous  ["><svg class="i"><use href="#i-left"/></svg></button>
+    <button class="ctl" type="button" id="viewer-next" aria-label="Next diagram" title="Next  ]"><svg class="i"><use href="#i-right"/></svg></button>
+  </div>
+</dialog>
+
+<script src="assets/site.js" defer></script>
+</body>
+</html>
