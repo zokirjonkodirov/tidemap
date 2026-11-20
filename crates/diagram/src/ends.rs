@@ -238,3 +238,92 @@ pub fn arrow_polygon(corners: &[Corner; 3], steps: usize) -> Vec<Pt> {
     }
     out
 }
+
+/// One drawing primitive of a line-end marker. `true` means filled with the line colour,
+/// `false` means filled with the background and outlined.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Prim {
+    Poly(Vec<Pt>, bool),
+    Seg(Pt, Pt),
+    Circle(Pt, f32, bool),
+}
+
+/// Whether `kind` is drawn from [`marker`] primitives rather than the classic arrow, circle
+/// and cross.
+pub fn is_marker(kind: crate::graph::ArrowKind) -> bool {
+    use crate::graph::ArrowKind as A;
+    !matches!(kind, A::None | A::Arrow | A::Circle | A::Cross)
+}
+
+fn mark_unit(size: f32) -> f32 {
+    size * ARROW_LENGTH
+}
+
+/// How far back from the tip the marker reaches; the line is cut that far short.
+pub fn marker_reach(kind: crate::graph::ArrowKind, size: f32) -> f32 {
+    use crate::graph::ArrowKind as A;
+    let u = mark_unit(size);
+    match kind {
+        A::Open => 0.0,
+        A::Triangle => 1.1 * u,
+        A::Diamond | A::DiamondFilled => 1.6 * u,
+        A::ExactlyOne => 1.0 * u,
+        A::ZeroOrOne => 1.65 * u,
+        A::ZeroOrMore => 1.95 * u,
+        A::OneOrMore => 1.2 * u,
+        _ => 0.0,
+    }
+}
+
+/// Primitives of the marker whose tip touches `tip`, pointing along `dir`.
+pub fn marker(kind: crate::graph::ArrowKind, tip: Pt, dir: Pt, size: f32) -> Vec<Prim> {
+    use crate::graph::ArrowKind as A;
+    let u = mark_unit(size);
+    let n = [-dir[1], dir[0]];
+    let at = |along: f32, across: f32| -> Pt {
+        [
+            tip[0] - dir[0] * along + n[0] * across,
+            tip[1] - dir[1] * along + n[1] * across,
+        ]
+    };
+    let bar = |along: f32| Prim::Seg(at(along, -0.55 * u), at(along, 0.55 * u));
+    let foot = |base: f32| {
+        vec![
+            Prim::Seg(at(base, 0.0), at(0.0, 0.0)),
+            Prim::Seg(at(base, 0.0), at(0.0, 0.55 * u)),
+            Prim::Seg(at(base, 0.0), at(0.0, -0.55 * u)),
+        ]
+    };
+    match kind {
+        A::Open => vec![
+            Prim::Seg(at(0.9 * u, 0.5 * u), tip),
+            Prim::Seg(at(0.9 * u, -0.5 * u), tip),
+        ],
+        A::Triangle => vec![Prim::Poly(
+            vec![tip, at(1.1 * u, 0.55 * u), at(1.1 * u, -0.55 * u)],
+            false,
+        )],
+        A::Diamond | A::DiamondFilled => vec![Prim::Poly(
+            vec![
+                tip,
+                at(0.8 * u, 0.45 * u),
+                at(1.6 * u, 0.0),
+                at(0.8 * u, -0.45 * u),
+            ],
+            kind == A::DiamondFilled,
+        )],
+        A::ExactlyOne => vec![bar(0.5 * u), bar(1.0 * u)],
+        A::ZeroOrOne => vec![bar(0.5 * u), Prim::Circle(at(1.25 * u, 0.0), 0.4 * u, false)],
+        A::ZeroOrMore => {
+            let mut v = foot(1.0 * u);
+            v.push(Prim::Circle(at(1.55 * u, 0.0), 0.4 * u, false));
+            v
+        }
+        A::OneOrMore => {
+            let mut v = foot(1.0 * u);
+            v.push(bar(1.2 * u));
+            v
+        }
+        _ => Vec::new(),
+    }
+}

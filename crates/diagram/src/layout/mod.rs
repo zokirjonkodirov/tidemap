@@ -77,10 +77,14 @@ pub struct EdgePath {
 pub struct Layout {
     pub nodes: Vec<Rect>,
     pub node_text: Vec<TextBlock>,
+    /// Per node: geometry of a `Record` box.
+    pub records: Vec<Option<std::sync::Arc<shape::Record>>>,
     pub clusters: Vec<Rect>,
     pub edges: Vec<EdgePath>,
     pub edge_text: Vec<Option<TextBlock>>,
     pub bounds: Rect,
+    /// Free-form primitives of chart-style diagrams.
+    pub decor: Vec<crate::decor::Decor>,
     /// Per node: (rank, position in rank), the stability seed.
     pub slots: Vec<(u32, u32)>,
 }
@@ -343,6 +347,12 @@ pub fn layout_with(
     times: Option<&StageTimes>,
     par: Par,
 ) -> Result<Layout, LayoutError> {
+    if let Some(chart) = &g.chart {
+        return crate::charts::layout(chart, measurer, m, cancel);
+    }
+    if let Some(model) = &g.seq {
+        return crate::seq::layout(g, model, measurer, m, cancel);
+    }
     let n = g.nodes.len();
     if n > MAX_NODES {
         return Err(LayoutError::Budget(format!(
@@ -366,14 +376,40 @@ pub fn layout_with(
 
     // Text and sizes (final orientation). Widths snap up so similar labels match.
     let mut node_text = Vec::with_capacity(n);
+    let mut records: Vec<Option<std::sync::Arc<shape::Record>>> = vec![None; n];
     let mut dims: Vec<[f32; 2]> = Vec::with_capacity(n);
     for (i, node) in g.nodes.iter().enumerate() {
         if i % 512 == 0 {
             check_cancel(cancel)?;
         }
+        if node.shape == ShapeKind::Record && !node.sections.is_empty() {
+            let lines: Vec<String> = node.label.split('\n').map(str::to_owned).collect();
+            let rec = shape::record(&lines, &node.sections, measurer, m);
+            dims.push(rec.size);
+            let flat: Vec<String> = lines.iter().map(|l| l.replace('\t', "  ")).collect();
+            node_text.push(TextBlock {
+                width: rec.size[0],
+                height: rec.size[1],
+                lines: flat,
+            });
+            records[i] = Some(std::sync::Arc::new(rec));
+            continue;
+        }
         let tb = measurer.wrap(&node.label, m.font_size, m.line_height, m.max_label_width);
         let mut d = shape::size(node.shape, &tb, m);
-        if !matches!(node.shape, ShapeKind::Circle | ShapeKind::DoubleCircle) {
+        if node.shape == ShapeKind::Bar && swap {
+            d = [d[1], d[0]];
+        }
+        if !matches!(
+            node.shape,
+            ShapeKind::Circle
+                | ShapeKind::DoubleCircle
+                | ShapeKind::StateStart
+                | ShapeKind::StateEnd
+                | ShapeKind::Bar
+                | ShapeKind::Choice
+                | ShapeKind::Record
+        ) {
             d[0] = pack::snap_width(d[0], m.width_step);
         }
         dims.push(d);
@@ -444,6 +480,7 @@ pub fn layout_with(
     Ok(Layout {
         nodes: core.rects,
         node_text,
+        records,
         clusters: core.clusters,
         edges: core.edges,
         edge_text,
@@ -453,6 +490,7 @@ pub fn layout_with(
             w: core.size[0],
             h: core.size[1],
         },
+        decor: Vec::new(),
         slots: core.slots,
     })
 }
@@ -639,6 +677,8 @@ fn sub_inputs(
             edges: sub_edges,
             clusters: sub_clusters,
             class_defs: Vec::new(),
+            seq: None,
+            chart: None,
         }),
         dims: nodes.iter().map(|&v| inp.dims[v as usize]).collect(),
         labels: kept.iter().map(|&e| inp.labels[e as usize]).collect(),
@@ -874,6 +914,7 @@ fn core_one(inp: &Inputs, run: &Run) -> Result<Core, LayoutError> {
             style: Default::default(),
             span: Default::default(),
             label_span: Default::default(),
+            sections: Vec::new(),
         });
         pdims.push(stand[ri]);
         pseed.push(None);
@@ -941,6 +982,8 @@ fn core_one(inp: &Inputs, run: &Run) -> Result<Core, LayoutError> {
             edges: pedges,
             clusters: pclusters,
             class_defs: Vec::new(),
+            seq: None,
+            chart: None,
         }),
         dims: pdims,
         labels: plabels,

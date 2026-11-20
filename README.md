@@ -76,7 +76,8 @@ cargo test --workspace run the tests (app and diagram engine)
 ## Mermaid support
 
 - Supported: `flowchart` / `graph` — all node shapes, edge kinds, labels, subgraphs, `classDef`, `class`, `style`, `linkStyle`. See [compatibility](docs/COMPATIBILITY.md).
-- Not yet: sequence, state, class, ER and other families (shown as a "not supported" card; source stays editable).
+- Also supported: `stateDiagram`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `pie`, `gantt`, `timeline`, `journey`, `quadrantChart`, `mindmap` (common syntax; see [compatibility](docs/COMPATIBILITY.md)).
+- Not yet: git graph, sankey, xychart, requirement, block, C4, architecture, packet, kanban, radar, treemap (shown as a "not supported" card; source stays editable).
 - `%%{init}%%` themes are ignored. Layout differs from Mermaid.js; no JS fallback.
 - Limits: 20,000 nodes/edges, 2 MiB source.
 

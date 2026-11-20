@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant W as Web App
+    actor DB as Database
+    U->>+W: Open dashboard
+    W->>+DB: SELECT widgets
+    DB-->>-W: rows
+    W-->>-U: Rendered page
+    loop Every minute
+        W->>W: refresh cache
+    end
+    alt cache hit
+        W-)U: push update
+    else miss
+        W-xDB: timeout
+    end
+    Note right of U: User sees data
+    Note over W,DB: Shared note

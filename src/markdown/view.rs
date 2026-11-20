@@ -2147,11 +2147,8 @@ enum Fit {
 fn unsupported_title(family: Family) -> &'static str {
     match family {
         Family::Flowchart => "Flowchart",
-        Family::Sequence => "Sequence diagrams are not drawn yet",
-        Family::State => "State diagrams are not drawn yet",
-        Family::Class => "Class diagrams are not drawn yet",
-        Family::Er => "ER diagrams are not drawn yet",
         Family::Other => "This diagram type is not drawn yet",
+        _ => "Diagram",
     }
 }
 
@@ -2171,7 +2168,7 @@ fn notice_height(ctx: &Context, leaf: &Leaf, inner: f32, _p: Palette) -> f32 {
 
 /// Whether the page draws this diagram (a flowchart with nodes) rather than showing its source.
 fn is_drawn(artifact: &RenderArtifact) -> bool {
-    artifact.rendered.family == Family::Flowchart && !artifact.rendered.scene.nodes.is_empty()
+    artifact.rendered.family.is_drawn() && (!artifact.rendered.scene.nodes.is_empty() || !artifact.rendered.scene.decor.is_empty())
 }
 
 /// Distance from the top of a diagram's embed to the middle of `node`, as drawn in a column of
@@ -2757,7 +2754,7 @@ mod tests {
 
     #[test]
     fn page_find_matches_unsupported_diagram_source() {
-        let mut rig = Harness::new("# Notes\n\n```mermaid\nsequenceDiagram\n  participant Reader\n  Reader->>Writer: hello\n```\n".to_owned());
+        let mut rig = Harness::new("# Notes\n\n```mermaid\nsankey-beta\n  Reader,Writer,5\n  Reader,Editor,3\n```\n".to_owned());
         rig.frame(1000.0);
         draw_diagrams(&mut rig);
         find_on_page(&mut rig, "reader", 30);

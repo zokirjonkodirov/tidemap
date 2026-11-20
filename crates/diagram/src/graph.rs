@@ -27,7 +27,27 @@ pub enum Family {
     Sequence,
     Class,
     Er,
+    Pie,
+    Gantt,
+    Timeline,
+    Journey,
+    Quadrant,
+    Mindmap,
     Other,
+}
+
+impl Family {
+    /// Whether the engine draws this family.
+    pub fn is_drawn(self) -> bool {
+        matches!(self, Family::Flowchart | Family::State | Family::Sequence | Family::Class | Family::Er
+                | Family::Pie
+                | Family::Gantt
+                | Family::Timeline
+                | Family::Journey
+                | Family::Quadrant
+                | Family::Mindmap
+        )
+    }
 }
 
 /// Main layout direction.
@@ -58,6 +78,18 @@ pub enum ShapeKind {
     Trapezoid,
     TrapezoidAlt,
     Asymmetric,
+    /// State diagram initial pseudo-state: small filled disc.
+    StateStart,
+    /// State diagram final state: ring around a filled disc.
+    StateEnd,
+    /// Fork/join bar of a state diagram (thin, filled).
+    Bar,
+    /// Note with a folded corner.
+    Note,
+    /// Small diamond of a state diagram choice.
+    Choice,
+    /// Box with a header and divided sections (UML class, ER entity).
+    Record,
 }
 
 /// Edge line style.
@@ -78,6 +110,22 @@ pub enum ArrowKind {
     Arrow,
     Circle,
     Cross,
+    /// Open "V" arrowhead (sequence async message).
+    Open,
+    /// Hollow triangle (UML inheritance, realization).
+    Triangle,
+    /// Hollow diamond (UML aggregation).
+    Diamond,
+    /// Filled diamond (UML composition).
+    DiamondFilled,
+    /// Entity-relationship: exactly one.
+    ExactlyOne,
+    /// Entity-relationship: zero or one.
+    ZeroOrOne,
+    /// Entity-relationship: zero or more.
+    ZeroOrMore,
+    /// Entity-relationship: one or more.
+    OneOrMore,
 }
 
 /// An edge end: a node or a whole cluster.
@@ -110,6 +158,8 @@ pub struct Node {
     pub span: Span,
     /// Raw label text in the source.
     pub label_span: Span,
+    /// Lines per section of a `Record` (header first); empty for other shapes.
+    pub sections: Vec<u16>,
 }
 
 /// A flowchart edge.
@@ -153,6 +203,10 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     pub clusters: Vec<Cluster>,
     pub class_defs: Vec<ClassDef>,
+    /// Extra model of a sequence diagram; such graphs use their own layout.
+    pub seq: Option<std::sync::Arc<crate::seq::Model>>,
+    /// Parsed data of a chart-style diagram; such graphs use their own layout.
+    pub chart: Option<std::sync::Arc<crate::charts::Chart>>,
 }
 
 /// A parse problem. `line` and `column` are 1-based; columns count chars.

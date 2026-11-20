@@ -12,6 +12,27 @@ use crate::lexer::{Lexer, LinkInfo, Tok, Token, skip_preamble, span};
 /// Parses `source`. Non-flowchart families return an empty graph and no diagnostics.
 pub fn parse(source: &str) -> Parsed {
     let family = detect(source);
+    if family == Family::State {
+        return crate::state::parse(source);
+    }
+    if matches!(
+        family,
+        Family::Pie | Family::Gantt | Family::Timeline | Family::Journey | Family::Quadrant
+    ) {
+        return crate::charts::parse(source, family);
+    }
+    if family == Family::Mindmap {
+        return crate::mindmap::parse(source);
+    }
+    if family == Family::Class {
+        return crate::class::parse(source);
+    }
+    if family == Family::Er {
+        return crate::er::parse(source);
+    }
+    if family == Family::Sequence {
+        return crate::seq::parse(source);
+    }
     if family != Family::Flowchart {
         return Parsed {
             family,
@@ -525,6 +546,7 @@ impl<'a> Parser<'a> {
             style: StyleProps::default(),
             span: node_span,
             label_span,
+            sections: Vec::new(),
         });
         self.nodes.insert(key.to_string(), id);
         id
@@ -729,7 +751,7 @@ impl<'a> Parser<'a> {
 
 // ---- free helpers -----------------------------------------------------------
 
-fn parse_direction(word: &str) -> Option<Direction> {
+pub(crate) fn parse_direction(word: &str) -> Option<Direction> {
     match word.trim() {
         "TB" | "TD" => Some(Direction::TB),
         "BT" => Some(Direction::BT),
@@ -740,7 +762,7 @@ fn parse_direction(word: &str) -> Option<Direction> {
 }
 
 /// Splits `text` into the first whitespace-delimited word and the trimmed rest.
-fn split_first_word(text: &str) -> (&str, &str) {
+pub(crate) fn split_first_word(text: &str) -> (&str, &str) {
     let text = text.trim();
     match text.find(char::is_whitespace) {
         Some(i) => (&text[..i], text[i..].trim_start()),
@@ -749,7 +771,7 @@ fn split_first_word(text: &str) -> (&str, &str) {
 }
 
 /// Copies every property set in `from` onto `into`.
-fn merge_style(into: &mut StyleProps, from: &StyleProps) {
+pub(crate) fn merge_style(into: &mut StyleProps, from: &StyleProps) {
     if from.fill.is_some() {
         into.fill = from.fill;
     }
@@ -766,7 +788,7 @@ fn merge_style(into: &mut StyleProps, from: &StyleProps) {
 }
 
 /// Parses `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa` and a few CSS names.
-fn parse_color(value: &str) -> Option<[u8; 4]> {
+pub(crate) fn parse_color(value: &str) -> Option<[u8; 4]> {
     let value = value.trim().to_ascii_lowercase();
     if let Some(hex) = value.strip_prefix('#') {
         if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -913,7 +935,7 @@ fn collect_subgraph_keys(body: &str) -> HashSet<String> {
 
 /// Cleans label text: removes quotes and markdown markers, converts line-break
 /// tags and `\n` to newlines, strips other HTML tags and decodes entities.
-fn clean_label(raw: &str) -> String {
+pub(crate) fn clean_label(raw: &str) -> String {
     let mut text = raw.trim();
     if let Some(inner) = text
         .strip_prefix('"')

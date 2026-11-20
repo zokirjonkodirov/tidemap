@@ -8,6 +8,14 @@ pub mod metrics;
 pub mod parser;
 pub mod scene;
 pub mod shape;
+mod state;
+pub mod seq;
+pub mod decor;
+pub mod charts;
+mod mindmap;
+mod class;
+mod er;
+mod linewise;
 pub mod style;
 pub mod svg;
 pub mod text;
@@ -47,6 +55,18 @@ pub fn detect(source: &str) -> Family {
         Family::Class
     } else if word == "erDiagram" {
         Family::Er
+    } else if word == "pie" {
+        Family::Pie
+    } else if word == "gantt" {
+        Family::Gantt
+    } else if word == "timeline" {
+        Family::Timeline
+    } else if word == "journey" {
+        Family::Journey
+    } else if word == "quadrantChart" {
+        Family::Quadrant
+    } else if word == "mindmap" {
+        Family::Mindmap
     } else {
         Family::Other
     }

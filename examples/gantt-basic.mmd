@@ -1,0 +1,11 @@
+gantt
+    title Release plan
+    dateFormat YYYY-MM-DD
+    section Design
+    Research        :done, a1, 2024-01-01, 14d
+    Wireframes      :active, a2, after a1, 10d
+    section Build
+    Backend         :b1, after a2, 30d
+    Frontend        :b2, after a2, 25d
+    Launch blocker  :crit, b3, after b2, 5d
+    Release         :milestone, m1, after b1, 0d

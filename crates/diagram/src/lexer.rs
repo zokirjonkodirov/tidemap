@@ -138,6 +138,12 @@ fn closers(open: ShapeKind) -> &'static [&'static str] {
         ShapeKind::Subroutine => &["]]"],
         ShapeKind::Cylinder => &[")]"],
         ShapeKind::Rect | ShapeKind::Asymmetric => &["]"],
+        ShapeKind::StateStart
+        | ShapeKind::StateEnd
+        | ShapeKind::Bar
+        | ShapeKind::Note
+        | ShapeKind::Record
+        | ShapeKind::Choice => &[],
         ShapeKind::Diamond => &["}"],
         ShapeKind::Hexagon => &["}}"],
         ShapeKind::Parallelogram | ShapeKind::Trapezoid => &["/]", "\\]"],

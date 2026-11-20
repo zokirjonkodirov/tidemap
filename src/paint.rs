@@ -7,6 +7,7 @@
 use egui::epaint::PathShape;
 use egui::{Color32, FontFamily, FontId, Mesh, Painter, Pos2, Shape, Stroke, Vec2};
 use tidemap_diagram::shape::{self, PathCmd};
+use tidemap_diagram::decor::{self, Anchor, Decor, Tone, tone_colors};
 use tidemap_diagram::ends;
 use tidemap_diagram::svg::{ARROW_LENGTH, end_reach};
 use tidemap_diagram::{
@@ -417,6 +418,96 @@ impl Frame<'_> {
         }
     }
 
+    /// Paints one primitive of a chart-style diagram.
+    fn decor(&mut self, d: &Decor) {
+        let colors = self.style.colors(self.dark);
+        let zoom = self.view.zoom();
+        let col = |tone: Tone| tone_colors(tone, colors);
+        match d {
+            Decor::Line { pts, width, dashed, tone } => {
+                let (c, _) = col(*tone);
+                let path: Vec<Pos2> = pts.iter().map(|p| self.view.pt(*p)).collect();
+                if path.len() < 2 {
+                    return;
+                }
+                let stroke = Stroke::new((width * zoom).max(1.0), color(c));
+                if *dashed {
+                    self.painter.extend(Shape::dashed_line(&path, stroke, (3.0 * zoom).max(3.0), (4.0 * zoom).max(4.0)));
+                } else {
+                    self.painter.add(Shape::line(path, stroke));
+                }
+            }
+            Decor::Rect { rect, radius, fill, stroke } => {
+                let (f, s) = col(*fill);
+                let r = self.view.rect(*rect);
+                let rad = (radius * zoom).min(r.width().min(r.height()) * 0.5);
+                self.painter.rect_filled(r, rad, color(f));
+                if let Some(t) = stroke {
+                    let (_, sc) = col(*t);
+                    let _ = s;
+                    self.painter.rect_stroke(r, rad, Stroke::new(1.0_f32, color(sc)), egui::StrokeKind::Inside);
+                }
+            }
+            Decor::Wedge { c, r, a0, a1, tone } => {
+                let (f, _) = col(*tone);
+                let pts: Vec<Pos2> = decor::wedge_points(*c, *r, *a0, *a1).into_iter().map(|p| self.view.pt(p)).collect();
+                self.closed(pts, color(f), Stroke::new(1.5_f32, self.canvas), None);
+            }
+            Decor::Circle { c, r, fill, stroke } => {
+                let (f, _) = col(*fill);
+                let center = self.view.pt(*c);
+                self.painter.circle_filled(center, r * zoom, color(f));
+                if let Some(t) = stroke {
+                    let (sc, _) = col(*t);
+                    let (_, sc2) = col(*t);
+                    let _ = sc;
+                    self.painter.circle_stroke(center, r * zoom, Stroke::new(1.0_f32, color(sc2)));
+                }
+            }
+            Decor::Text { at, text, size, anchor, bold, tone } => {
+                let (c, _) = col(*tone);
+                let family = if *bold { theme::font_medium() } else { FontFamily::Proportional };
+                self.text_anchored(text, *at, *size, *anchor, family, color(c));
+            }
+        }
+    }
+
+    /// Paints one line of text anchored horizontally at `at`, centred vertically (world units).
+    fn text_anchored(&mut self, text: &str, at: Pt, size: f32, anchor: Anchor, family: FontFamily, c: Color32) {
+        let zoom = self.view.zoom();
+        let px = size * zoom;
+        if text.is_empty() || px < MIN_TEXT_PX || c.a() == 0 {
+            return;
+        }
+        let (raster, scale) = text::raster(px, self.settled);
+        let middle = self.view.pt(at);
+        let galley = self.painter.layout_no_wrap(text.to_owned(), FontId::new(raster, family), c);
+        let w = galley.size().x * scale;
+        let dx = match anchor {
+            Anchor::Start => 0.0,
+            Anchor::Middle => -w * 0.5,
+            Anchor::End => -w,
+        };
+        let pos = middle + egui::vec2(dx, -galley.size().y * 0.5 * scale);
+        text::paint_scaled(&self.painter, pos, galley, c, scale);
+        self.texts += 1;
+    }
+
+    /// Paints one line of text with its left edge and vertical middle at `at` (world units).
+    fn text_left(&mut self, text: &str, at: Pt, size: f32, family: FontFamily, c: Color32) {
+        let zoom = self.view.zoom();
+        let px = size * zoom;
+        if text.is_empty() || px < MIN_TEXT_PX || c.a() == 0 {
+            return;
+        }
+        let (raster, scale) = text::raster(px, self.settled);
+        let middle = self.view.pt(at);
+        let galley = self.painter.layout_no_wrap(text.to_owned(), FontId::new(raster, family), c);
+        let pos = middle - egui::vec2(0.0, galley.size().y * 0.5 * scale);
+        text::paint_scaled(&self.painter, pos, galley, c, scale);
+        self.texts += 1;
+    }
+
     fn cluster(&mut self, c: &ClusterItem, level: Lod) {
         let paint = cluster_paint(c, self.scene, self.style, self.dark);
         let strong = !self.dimming();
@@ -472,8 +563,32 @@ impl Frame<'_> {
         size: f32,
         stroke_w: f32,
         c: Color32,
+        bg: Color32,
     ) -> Vec<Shape> {
         let zoom = self.view.zoom();
+        if ends::is_marker(kind) {
+            let width = ((stroke_w * 1.0).max(1.0) * zoom).max(1.0);
+            let line = Stroke::new(width, c);
+            let mut shapes = Vec::new();
+            for prim in ends::marker(kind, tip, dir, size) {
+                match prim {
+                    ends::Prim::Seg(a, b) => {
+                        shapes.push(Shape::line_segment([self.view.pt(a), self.view.pt(b)], line));
+                    }
+                    ends::Prim::Poly(points, filled) => {
+                        let points: Vec<Pos2> = points.into_iter().map(|p| self.view.pt(p)).collect();
+                        shapes.push(Shape::Path(PathShape::convex_polygon(points, if filled { c } else { bg }, line)));
+                    }
+                    ends::Prim::Circle(center, r, filled) => {
+                        shapes.push(Shape::circle_filled(self.view.pt(center), r * zoom, if filled { c } else { bg }));
+                        if !filled {
+                            shapes.push(Shape::circle_stroke(self.view.pt(center), r * zoom, line));
+                        }
+                    }
+                }
+            }
+            return shapes;
+        }
         let n = [-dir[1], dir[0]];
         let at = |along: f32, across: f32| -> Pt {
             [
@@ -524,6 +639,7 @@ impl Frame<'_> {
                 ));
                 shapes
             }
+            _ => Vec::new(),
         }
     }
 
@@ -563,10 +679,10 @@ impl Frame<'_> {
         let mut marks = Vec::new();
         let (reach_end, reach_start) = (end_reach(e.head, size), end_reach(e.tail, size));
         if let (Some(dir), Some(tip)) = (ends::end_dir(&e.points, reach_end), e.points.last()) {
-            marks.extend(self.end_mark(e.head, *tip, dir, size, paint.stroke_width, stroke_color));
+            marks.extend(self.end_mark(e.head, *tip, dir, size, paint.stroke_width, stroke_color, color(paint.fill)));
         }
         if let (Some(dir), Some(tip)) = (ends::start_dir(&e.points, reach_start), e.points.first()) {
-            marks.extend(self.end_mark(e.tail, *tip, dir, size, paint.stroke_width, stroke_color));
+            marks.extend(self.end_mark(e.tail, *tip, dir, size, paint.stroke_width, stroke_color, color(paint.fill)));
         }
 
         // The line runs a little way under its decorations so no seam shows.
@@ -703,6 +819,34 @@ impl Frame<'_> {
                     self.detail_line(&cmds, stroke);
                 }
             }
+            ShapeKind::Record => {
+                if let Some(rec) = &n.record {
+                    for &y in &rec.dividers {
+                        let cmds = [PathCmd::Move([r.x, r.y + y]), PathCmd::Line([r.right(), r.y + y])];
+                        self.detail_line(&cmds, stroke);
+                    }
+                }
+            }
+            ShapeKind::StateEnd => {
+                let inner = Rect {
+                    x: r.x + 4.0,
+                    y: r.y + 4.0,
+                    w: (r.w - 8.0).max(0.0),
+                    h: (r.h - 8.0).max(0.0),
+                };
+                let points = self.outline(ShapeKind::Circle, inner, radius);
+                self.closed(points, stroke_color, Stroke::NONE, None);
+            }
+            ShapeKind::Note => {
+                // Folded corner.
+                let cut = 10.0f32.min(r.w / 2.0).min(r.h / 2.0);
+                let cmds = [
+                    PathCmd::Move([r.right() - cut, r.y]),
+                    PathCmd::Line([r.right() - cut, r.y + cut]),
+                    PathCmd::Line([r.right(), r.y + cut]),
+                ];
+                self.detail_line(&cmds, stroke);
+            }
             ShapeKind::DoubleCircle => {
                 let inner = Rect {
                     x: r.x + 5.0,
@@ -719,7 +863,20 @@ impl Frame<'_> {
         if level == Lod::NoText {
             self.skeleton(n, self.text_tone(color(paint.text), strong));
         }
-        if level == Lod::Full {
+        if level == Lod::Full && let Some(rec) = n.record.clone() {
+            let text_color = self.text_tone(color(paint.text), strong);
+            let cx = r.center()[0];
+            for row in &rec.rows {
+                for (x, cell) in &row.cells {
+                    if row.header {
+                        self.text_block(std::slice::from_ref(cell), [cx, r.y + row.y], line_height, font_size, theme::font_medium(), text_color);
+                    } else {
+                        let at = [r.x + x, r.y + row.y];
+                        self.text_left(cell, at, rec.member_font, FontFamily::Proportional, text_color);
+                    }
+                }
+            }
+        } else if level == Lod::Full {
             let [cx, cy] = r.center();
             let text_color = self.text_tone(color(paint.text), strong);
             self.text_block(
@@ -880,6 +1037,11 @@ pub fn paint_scene(
         curved_far_edges: scratch.len() <= 2500,
     };
 
+    for d in &scene.decor {
+        if d.bounds().intersects(world) {
+            frame.decor(d);
+        }
+    }
     // Paint order: clusters, edges, edge labels, nodes.
     for id in scratch.iter() {
         if let ItemId::Cluster(c) = id

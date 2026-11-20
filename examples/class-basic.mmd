@@ -1,0 +1,22 @@
+classDiagram
+    class Animal {
+        <<abstract>>
+        +String name
+        +int age
+        +eat() void
+        +sleep() void
+    }
+    class Dog {
+        +bark() void
+    }
+    class Cat
+    Animal <|-- Dog
+    Animal <|-- Cat
+    class Owner {
+        +String name
+    }
+    Owner "1" --> "*" Dog : owns
+    Dog *-- Tail
+    Dog o-- Collar : wears
+    Cat ..> Food : eats
+    Cat ..|> Pet

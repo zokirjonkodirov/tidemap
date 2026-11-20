@@ -7,11 +7,17 @@ Last updated 19 November 2026. This describes what the in-house engine (`crates/
 | Family | Keyword | Status |
 |---|---|---|
 | Flowchart | `flowchart`, `graph` | Supported |
-| Sequence | `sequenceDiagram` | Not supported yet |
-| State | `stateDiagram`, `stateDiagram-v2` | Not supported yet |
-| Class | `classDiagram` | Not supported yet |
-| Entity relationship | `erDiagram` | Not supported yet |
-| Everything else (gantt, pie, journey, mindmap, timeline, git graph, and others) | any other first word | Not supported yet |
+| Sequence | `sequenceDiagram` | Participants/actors with aliases, all message arrows, `+`/`-` activation, `activate`/`deactivate`, notes (left/right/over), `loop`/`alt`/`opt`/`par`/`critical`/`break`/`rect` frames with `else`/`and`/`option`, `autonumber`. `box` groups are ignored. |
+| State | `stateDiagram`, `stateDiagram-v2` | Transitions, labels, `[*]` per scope, composite states, `state "T" as id`, descriptions, `<<choice>>`/`<<fork>>`/`<<join>>`, notes (drawn above/below, not beside), `direction`, `classDef`/`class`/`style`. Concurrency `--` is ignored. |
+| Class | `classDiagram` | Classes with annotations, attributes, methods, generics `~T~`, all relation markers (inheritance, composition, aggregation, association, dependency, realization), cardinalities, labels, notes, namespaces. `classDef`/`style` are skipped. |
+| Entity relationship | `erDiagram` | Entities with attributes (type, name, PK/FK/UK, comment), crow's foot cardinalities, identifying and non-identifying lines, aliases. |
+| Pie | `pie` | `title`, `showData`, slices (sorted by size). |
+| Gantt | `gantt` | `title`, `dateFormat`, sections, `crit`/`active`/`done`/`milestone`, absolute dates, durations, `after id`. `axisFormat`, `excludes` and `todayMarker` are ignored. |
+| Timeline | `timeline` | `title`, sections, periods with several events. |
+| User journey | `journey` | `title`, sections, tasks with score and actors. |
+| Quadrant chart | `quadrantChart` | Axes, four quadrant titles, points. Point styling is ignored. |
+| Mindmap | `mindmap` | Indentation tree, node shapes `[ ] ( ) (( )) )) (( {{ }}`. Drawn left to right. |
+| Everything else (git graph, sankey, xychart, requirement, block, C4, architecture, packet, kanban, radar, treemap) | any other first word | Not supported yet |
 
 A source in an unsupported family shows a card with the title "<Family> diagrams are not supported yet" (or "This diagram type is not supported yet"). The source stays editable. There is no fallback renderer.
 

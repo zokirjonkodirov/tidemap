@@ -28,6 +28,10 @@ pub enum Role {
     External,
     Other,
     Error,
+    /// Pseudo-states drawn in the line colour (state start, end, fork bars).
+    Ink,
+    /// Sticky note.
+    Note,
 }
 
 /// What decides a node's swatch.
@@ -212,8 +216,8 @@ impl StyleSheet {
 /// Colour role of a node shape.
 pub fn role(shape: ShapeKind) -> Role {
     match shape {
-        ShapeKind::Rect | ShapeKind::Rounded => Role::Process,
-        ShapeKind::Diamond | ShapeKind::Hexagon => Role::Decision,
+        ShapeKind::Rect | ShapeKind::Rounded | ShapeKind::Record => Role::Process,
+        ShapeKind::Diamond | ShapeKind::Hexagon | ShapeKind::Choice => Role::Decision,
         ShapeKind::Cylinder => Role::Store,
         ShapeKind::Stadium | ShapeKind::Circle | ShapeKind::DoubleCircle => Role::Terminal,
         ShapeKind::Subroutine | ShapeKind::Asymmetric => Role::External,
@@ -221,6 +225,8 @@ pub fn role(shape: ShapeKind) -> Role {
         | ShapeKind::ParallelogramAlt
         | ShapeKind::Trapezoid
         | ShapeKind::TrapezoidAlt => Role::Other,
+        ShapeKind::StateStart | ShapeKind::StateEnd | ShapeKind::Bar => Role::Ink,
+        ShapeKind::Note => Role::Note,
     }
 }
 
@@ -233,6 +239,11 @@ fn role_swatch(c: &DiagramColors, r: Role) -> Swatch {
         Role::External => c.lavender,
         Role::Other => c.gray,
         Role::Error => c.rose,
+        Role::Note => c.yellow,
+        Role::Ink => Swatch {
+            fill: c.edge,
+            stroke: c.edge,
+        },
     }
 }
 
@@ -375,6 +386,10 @@ pub fn node_paint(n: &NodeItem, scene: &Scene, s: &StyleSheet, dark: bool) -> Pa
         stroke_width: s.node_stroke,
         dashed: false,
     };
+    if n.shape == ShapeKind::StateEnd {
+        // Ring only; the inner disc is drawn in the stroke colour.
+        paint.fill = [0, 0, 0, 0];
+    }
     resolve_authored(&mut paint, &n.classes, &n.style, scene, colors);
     paint
 }

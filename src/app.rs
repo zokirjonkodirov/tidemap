@@ -1,7 +1,7 @@
 use std::{collections::{BTreeMap, BTreeSet, HashMap}, path::PathBuf, sync::Arc, time::{Duration,Instant}};
 use tidemap_core::{WorkspaceCore,default_data_dir,source::{extract_diagrams,patch_diagram}};
 use tidemap_model::*;
-use tidemap_diagram::{ColorBy,Family,NodeId,Span,StyleSheet};
+use tidemap_diagram::{ColorBy,NodeId,Span,StyleSheet};
 use tidemap_renderer::Engine;
 use crate::{ui::{self,dialogs,palette::Command,tree},canvas::DiagramCanvas,editor::SourceEditor,source_map,style_file::{self,StyleFile},theme};
 
@@ -330,14 +330,10 @@ impl TidemapApp {
     pub(crate) fn canvas_message(&self,artifact:Option<&Arc<RenderArtifact>>,key:&str)->Option<(String,String,CardAction)>{
         if let Some(artifact)=artifact{
             let title=match artifact.rendered.family{
-                Family::Flowchart=>return None,
-                Family::Sequence=>"Sequence diagrams are not supported yet",
-                Family::State=>"State diagrams are not supported yet",
-                Family::Class=>"Class diagrams are not supported yet",
-                Family::Er=>"ER diagrams are not supported yet",
-                Family::Other=>"This diagram type is not supported yet",
+                f if f.is_drawn()=>return None,
+                _=>"This diagram type is not supported yet",
             };
-            return Some((title.into(),"Flowcharts render today. The source is still here to read and edit.".into(),CardAction::OpenSource));
+            return Some((title.into(),"Flowchart, state, sequence, class, ER, pie, gantt, timeline, journey, quadrant and mindmap diagrams render today. The source is still here to read and edit.".into(),CardAction::OpenSource));
         }
         let diagnostic=self.diagnostics.get(key)?;
         match diagnostic.kind{
@@ -364,8 +360,8 @@ impl TidemapApp {
     /// Why the active diagram cannot be exported, if it cannot.
     pub(crate) fn export_unavailable(&self)->Option<&'static str>{
         let Some(preview)=self.active_preview()else{return Some("Nothing is drawn yet")};
-        if preview.artifact.rendered.family!=Family::Flowchart{return Some("Only flowcharts can be exported yet");}
-        if preview.artifact.rendered.scene.nodes.is_empty(){return Some("This diagram has no nodes to export");}
+        if !preview.artifact.rendered.family.is_drawn(){return Some("This diagram type cannot be exported yet");}
+        if preview.artifact.rendered.scene.nodes.is_empty()&&preview.artifact.rendered.scene.decor.is_empty(){return Some("This diagram has nothing to export");}
         None
     }
     /// Asks for a file name and hands the export to the engine.

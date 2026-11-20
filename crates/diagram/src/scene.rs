@@ -28,6 +28,8 @@ pub struct NodeItem {
     pub role_shape: ShapeKind,
     pub classes: Vec<u16>,
     pub style: StyleProps,
+    /// Compartment geometry of a `Record` node.
+    pub record: Option<std::sync::Arc<crate::shape::Record>>,
 }
 
 /// A routed edge.
@@ -71,6 +73,8 @@ pub struct Scene {
     pub edges: Vec<EdgeItem>,
     pub nodes: Vec<NodeItem>,
     pub class_defs: Vec<ClassDef>,
+    /// Chart primitives, painted first.
+    pub decor: Vec<crate::decor::Decor>,
     grid: Grid,
     adjacency: Adjacency,
     meta: Meta,
@@ -326,6 +330,7 @@ impl Scene {
                 role_shape: n.shape,
                 classes: n.classes.clone(),
                 style: n.style.clone(),
+                record: l.records.get(i).cloned().flatten(),
             })
             .collect();
 
@@ -366,6 +371,7 @@ impl Scene {
             edges,
             nodes,
             class_defs: g.class_defs.clone(),
+            decor: l.decor.clone(),
             grid,
             adjacency,
             meta,

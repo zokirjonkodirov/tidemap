@@ -81,6 +81,14 @@ pub enum PathCmd {
 
 /// Node size for a shape holding `text`.
 pub fn size(kind: ShapeKind, text: &TextBlock, m: &Metrics) -> [f32; 2] {
+    match kind {
+        ShapeKind::Choice => return [32.0, 32.0],
+        ShapeKind::Record => return [text.width + 2.0 * m.pad_x, text.height],
+        ShapeKind::StateStart => return [16.0, 16.0],
+        ShapeKind::StateEnd => return [22.0, 22.0],
+        ShapeKind::Bar => return [64.0, 8.0],
+        _ => {}
+    }
     let w = text.width + 2.0 * m.pad_x;
     let h = text.height + 2.0 * m.pad_y;
     let [w, h] = match kind {
@@ -106,6 +114,12 @@ pub fn size(kind: ShapeKind, text: &TextBlock, m: &Metrics) -> [f32; 2] {
         | ShapeKind::TrapezoidAlt
         | ShapeKind::Asymmetric => [w + h * 0.5, h],
         ShapeKind::Cylinder => [w, h + 16.0],
+        ShapeKind::Note => [w + 8.0, h],
+        ShapeKind::StateStart
+        | ShapeKind::StateEnd
+        | ShapeKind::Bar
+        | ShapeKind::Choice
+        | ShapeKind::Record => [w, h],
     };
     [w.max(MIN_W), h.max(MIN_H)]
 }
@@ -117,7 +131,7 @@ fn polygon(kind: ShapeKind, r: Rect) -> Option<Vec<[f32; 2]>> {
     let quarter = r.h * 0.25;
     let skew = r.h * 0.5;
     Some(match kind {
-        ShapeKind::Diamond => vec![[cx, y0], [x1, cy], [cx, y1], [x0, cy]],
+        ShapeKind::Diamond | ShapeKind::Choice => vec![[cx, y0], [x1, cy], [cx, y1], [x0, cy]],
         ShapeKind::Hexagon => vec![
             [x0 + quarter, y0],
             [x1 - quarter, y0],
@@ -133,6 +147,10 @@ fn polygon(kind: ShapeKind, r: Rect) -> Option<Vec<[f32; 2]>> {
             vec![[x0, y0], [x1, y0], [x1 - quarter, y1], [x0 + quarter, y1]]
         }
         ShapeKind::Asymmetric => vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0 + quarter, cy]],
+        ShapeKind::Note => {
+            let cut = 10.0f32.min(r.w / 2.0).min(r.h / 2.0);
+            vec![[x0, y0], [x1 - cut, y0], [x1, y0 + cut], [x1, y1], [x0, y1]]
+        }
         _ => return None,
     })
 }
@@ -221,7 +239,12 @@ pub fn outline(kind: ShapeKind, r: Rect, radius: f32) -> Vec<PathCmd> {
         ShapeKind::Rect | ShapeKind::Subroutine => rounded_rect(r, radius),
         ShapeKind::Rounded => rounded_rect(r, radius * 1.5),
         ShapeKind::Stadium => rounded_rect(r, r.h / 2.0),
-        ShapeKind::Circle | ShapeKind::DoubleCircle => ellipse(r),
+        ShapeKind::Circle
+        | ShapeKind::DoubleCircle
+        | ShapeKind::StateStart
+        | ShapeKind::StateEnd => ellipse(r),
+        ShapeKind::Bar => rounded_rect(r, 2.0),
+        ShapeKind::Record => rounded_rect(r, radius.min(6.0)),
         ShapeKind::Cylinder => {
             let ry = 8.0f32.min(r.h / 4.0);
             let (x0, y0, x1, y1) = (r.x, r.y, r.right(), r.bottom());
@@ -271,7 +294,10 @@ pub fn boundary(kind: ShapeKind, r: Rect, toward: [f32; 2]) -> [f32; 2] {
     }
     let (hw, hh) = (r.w / 2.0, r.h / 2.0);
     match kind {
-        ShapeKind::Circle | ShapeKind::DoubleCircle => {
+        ShapeKind::Circle
+        | ShapeKind::DoubleCircle
+        | ShapeKind::StateStart
+        | ShapeKind::StateEnd => {
             if hw <= 0.0 || hh <= 0.0 {
                 return rect_hit(r, d);
             }
@@ -332,4 +358,111 @@ fn polygon_hit(points: &[[f32; 2]], c: [f32; 2], d: [f32; 2]) -> Option<[f32; 2]
         }
     }
     best.map(|t| [c[0] + d[0] * t, c[1] + d[1] * t])
+}
+
+/// Row heights and paddings of a record box.
+const HEAD_LINE: f32 = 22.0;
+const MEMBER_LINE: f32 = 19.0;
+const SECTION_PAD: f32 = 7.0;
+const HEAD_PAD: f32 = 8.0;
+const COL_GAP: f32 = 16.0;
+const SIDE_PAD: f32 = 12.0;
+const MEMBER_FONT: f32 = 13.0;
+
+/// One line of text inside a record.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecordRow {
+    /// Centre of the row measured from the top of the box.
+    pub y: f32,
+    /// Header rows are centred on the box and drawn in the heading weight.
+    pub header: bool,
+    /// `(x from the left edge, text)`; columns of a member row come from tab stops.
+    pub cells: Vec<(f32, String)>,
+}
+
+/// Geometry of a header-plus-sections box, relative to its top-left corner.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Record {
+    pub size: [f32; 2],
+    /// Heights of the dividing lines from the top.
+    pub dividers: Vec<f32>,
+    pub rows: Vec<RecordRow>,
+    pub member_font: f32,
+}
+
+/// Measures a record: `lines` split into `sections` (header first). Tabs separate columns.
+pub fn record(lines: &[String], sections: &[u16], measurer: &crate::text::Measurer, m: &Metrics) -> Record {
+    let mut rows = Vec::new();
+    let mut dividers = Vec::new();
+    let mut y = 0.0f32;
+    let mut width = 0.0f32;
+    let mut at = 0usize;
+    let mut header_cells: Vec<(usize, f32)> = Vec::new();
+    for (s, &count) in sections.iter().enumerate() {
+        let count = count as usize;
+        let slice = &lines[at.min(lines.len())..(at + count).min(lines.len())];
+        at += count;
+        if s == 0 {
+            y += HEAD_PAD;
+            for line in slice {
+                let w = measurer.width(line, m.font_size) * 1.04;
+                width = width.max(w + 2.0 * SIDE_PAD + 8.0);
+                header_cells.push((rows.len(), w));
+                rows.push(RecordRow {
+                    y: y + HEAD_LINE / 2.0,
+                    header: true,
+                    cells: vec![(0.0, line.clone())],
+                });
+                y += HEAD_LINE;
+            }
+            y += HEAD_PAD;
+            continue;
+        }
+        dividers.push(y);
+        if slice.is_empty() {
+            y += SECTION_PAD + 2.0;
+            continue;
+        }
+        y += SECTION_PAD;
+        let split: Vec<Vec<&str>> = slice.iter().map(|l| l.split('\t').collect()).collect();
+        let cols = split.iter().map(Vec::len).max().unwrap_or(1);
+        let mut col_w = vec![0.0f32; cols];
+        for row in &split {
+            for (c, cell) in row.iter().enumerate() {
+                col_w[c] = col_w[c].max(measurer.width(cell, MEMBER_FONT));
+            }
+        }
+        let mut offsets = Vec::with_capacity(cols);
+        let mut x = SIDE_PAD;
+        for w in &col_w {
+            offsets.push(x);
+            x += w + COL_GAP;
+        }
+        width = width.max(x - COL_GAP + SIDE_PAD);
+        for row in &split {
+            rows.push(RecordRow {
+                y: y + MEMBER_LINE / 2.0,
+                header: false,
+                cells: row
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| !c.is_empty())
+                    .map(|(c, cell)| (offsets[c], (*cell).to_string()))
+                    .collect(),
+            });
+            y += MEMBER_LINE;
+        }
+        y += SECTION_PAD;
+    }
+    let width = width.max(88.0);
+    // Header text is centred on the final width, so its x offset is the half width.
+    for (row, _) in header_cells {
+        rows[row].cells[0].0 = width / 2.0;
+    }
+    Record {
+        size: [width, y.max(30.0)],
+        dividers,
+        rows,
+        member_font: MEMBER_FONT,
+    }
 }

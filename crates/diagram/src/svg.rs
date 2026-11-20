@@ -3,6 +3,7 @@
 use std::fmt::Write as _;
 
 use crate::ends;
+use crate::decor::{Anchor, Decor, Tone, tone_colors};
 use crate::graph::{ArrowKind, LineKind, ShapeKind};
 use crate::scene::{ClusterItem, EdgeItem, NodeItem, Scene};
 use crate::shape::{self, PathCmd, Rect};
@@ -154,11 +155,70 @@ pub fn end_reach(kind: ArrowKind, size: f32) -> f32 {
         ArrowKind::Arrow => ends::arrow_reach(size),
         ArrowKind::Circle => 2.0 * size * 0.45 * ARROW_LENGTH,
         ArrowKind::Cross => 2.0 * size * 0.7 * ARROW_LENGTH * std::f32::consts::FRAC_1_SQRT_2,
+        other => ends::marker_reach(other, size),
     }
 }
 
 /// Decoration at a line end. `dir` points at the tip and follows the visible curve.
-fn arrow_end(kind: ArrowKind, tip: Pt, dir: Pt, size: f32, stroke_w: f32, color: Rgba) -> String {
+fn marker_svg(prims: &[ends::Prim], stroke_w: f32, color: Rgba, bg: Rgba) -> String {
+    let stroke = paint_attr("stroke", color);
+    let w = num(stroke_w.max(1.0));
+    let mut out = String::new();
+    for prim in prims {
+        match prim {
+            ends::Prim::Seg(a, b) => {
+                let _ = writeln!(
+                    out,
+                    "<path d=\"M{} {}L{} {}\" fill=\"none\" {stroke} stroke-width=\"{w}\" stroke-linecap=\"round\"/>",
+                    num(a[0]),
+                    num(a[1]),
+                    num(b[0]),
+                    num(b[1])
+                );
+            }
+            ends::Prim::Poly(points, filled) => {
+                let mut d = String::new();
+                for (i, p) in points.iter().enumerate() {
+                    let _ = write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, num(p[0]), num(p[1]));
+                }
+                let fill = paint_attr("fill", if *filled { color } else { bg });
+                let _ = writeln!(
+                    out,
+                    "<path d=\"{d}Z\" {fill} {stroke} stroke-width=\"{w}\" stroke-linejoin=\"round\"/>"
+                );
+            }
+            ends::Prim::Circle(c, r, filled) => {
+                let fill = paint_attr("fill", if *filled { color } else { bg });
+                let _ = writeln!(
+                    out,
+                    "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" {fill} {stroke} stroke-width=\"{w}\"/>",
+                    num(c[0]),
+                    num(c[1]),
+                    num(*r)
+                );
+            }
+        }
+    }
+    out
+}
+
+/// Decoration at a line end. `dir` points at the tip and follows the visible curve.
+fn arrow_end(
+    kind: ArrowKind,
+    tip: Pt,
+    dir: Pt,
+    size: f32,
+    stroke_w: f32,
+    color: Rgba,
+    bg: Rgba,
+) -> String {
+    if ends::is_marker(kind) {
+        return marker_svg(&ends::marker(kind, tip, dir, size), stroke_w, color, bg);
+    }
+    arrow_end_classic(kind, tip, dir, size, stroke_w, color)
+}
+
+fn arrow_end_classic(kind: ArrowKind, tip: Pt, dir: Pt, size: f32, stroke_w: f32, color: Rgba) -> String {
     let n = [-dir[1], dir[0]];
     let at = |along: f32, across: f32| -> Pt {
         [
@@ -219,6 +279,7 @@ fn arrow_end(kind: ArrowKind, tip: Pt, dir: Pt, size: f32, stroke_w: f32, color:
                 num((stroke_w * 1.1).max(1.2)),
             )
         }
+        _ => String::new(),
     }
 }
 
@@ -296,6 +357,98 @@ fn write_cluster(
     out.push_str("</g>\n");
 }
 
+fn write_decor(out: &mut String, d: &Decor, style: &StyleSheet, dark: bool, family: &str) {
+    let colors = style.colors(dark);
+    let col = |t: Tone| tone_colors(t, colors);
+    match d {
+        Decor::Line { pts, width, dashed, tone } => {
+            let (c, _) = col(*tone);
+            let mut path = String::new();
+            for (i, p) in pts.iter().enumerate() {
+                let _ = write!(path, "{}{} {}", if i == 0 { "M" } else { "L" }, num(p[0]), num(p[1]));
+            }
+            let dash = if *dashed { " stroke-dasharray=\"3 4\"" } else { "" };
+            let _ = writeln!(
+                out,
+                "<path d=\"{path}\" fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",
+                paint_attr("stroke", c),
+                num(*width)
+            );
+        }
+        Decor::Rect { rect, radius, fill, stroke } => {
+            let (f, _) = col(*fill);
+            let st = match stroke {
+                Some(t) => format!("{} stroke-width=\"1\"", paint_attr("stroke", col(*t).1)),
+                None => String::new(),
+            };
+            let _ = writeln!(
+                out,
+                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" {} {st}/>",
+                num(rect.x),
+                num(rect.y),
+                num(rect.w),
+                num(rect.h),
+                num(*radius),
+                paint_attr("fill", f)
+            );
+        }
+        Decor::Wedge { c, r, a0, a1, tone } => {
+            let (f, _) = col(*tone);
+            let p0 = [c[0] + r * a0.cos(), c[1] + r * a0.sin()];
+            let p1 = [c[0] + r * a1.cos(), c[1] + r * a1.sin()];
+            let large = i32::from((a1 - a0).abs() > std::f32::consts::PI);
+            let _ = writeln!(
+                out,
+                "<path d=\"M{} {}L{} {}A{} {} 0 {large} 1 {} {}Z\" {} {} stroke-width=\"1.5\" stroke-linejoin=\"round\"/>",
+                num(c[0]),
+                num(c[1]),
+                num(p0[0]),
+                num(p0[1]),
+                num(*r),
+                num(*r),
+                num(p1[0]),
+                num(p1[1]),
+                paint_attr("fill", f),
+                paint_attr("stroke", colors.canvas)
+            );
+        }
+        Decor::Circle { c, r, fill, stroke } => {
+            let (f, _) = col(*fill);
+            let st = match stroke {
+                Some(t) => format!("{} stroke-width=\"1\"", paint_attr("stroke", col(*t).1)),
+                None => String::new(),
+            };
+            let _ = writeln!(
+                out,
+                "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" {} {st}/>",
+                num(c[0]),
+                num(c[1]),
+                num(*r),
+                paint_attr("fill", f)
+            );
+        }
+        Decor::Text { at, text, size, anchor, bold, tone } => {
+            let (c, _) = col(*tone);
+            let anchor = match anchor {
+                Anchor::Start => "start",
+                Anchor::Middle => "middle",
+                Anchor::End => "end",
+            };
+            let _ = writeln!(
+                out,
+                "<text x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\" font-family=\"{}\" font-size=\"{}\" font-weight=\"{}\" {}>{}</text>",
+                num(at[0]),
+                num(at[1] + size * BASELINE),
+                esc(family),
+                num(*size),
+                if *bold { 600 } else { 400 },
+                paint_attr("fill", c),
+                esc(text)
+            );
+        }
+    }
+}
+
 fn write_edge(out: &mut String, scene: &Scene, e: &EdgeItem, style: &StyleSheet, dark: bool) {
     if e.line == LineKind::Invisible || e.points.len() < 2 {
         return;
@@ -305,10 +458,10 @@ fn write_edge(out: &mut String, scene: &Scene, e: &EdgeItem, style: &StyleSheet,
     let (mut head, mut tail) = (String::new(), String::new());
     let (reach_end, reach_start) = (end_reach(e.head, size), end_reach(e.tail, size));
     if let (Some(dir), Some(tip)) = (ends::end_dir(&e.points, reach_end), e.points.last()) {
-        head = arrow_end(e.head, *tip, dir, size, paint.stroke_width, paint.stroke);
+        head = arrow_end(e.head, *tip, dir, size, paint.stroke_width, paint.stroke, paint.fill);
     }
     if let (Some(dir), Some(tip)) = (ends::start_dir(&e.points, reach_start), e.points.first()) {
-        tail = arrow_end(e.tail, *tip, dir, size, paint.stroke_width, paint.stroke);
+        tail = arrow_end(e.tail, *tip, dir, size, paint.stroke_width, paint.stroke, paint.fill);
     }
     let line = ends::trimmed(&e.points, reach_start, reach_end);
     let dash = if paint.dashed {
@@ -463,6 +616,45 @@ fn write_node(
                 );
             }
         }
+        ShapeKind::Record => {
+            if let Some(rec) = &n.record {
+                for &y in &rec.dividers {
+                    line(
+                        out,
+                        &format!("M{} {}L{} {}", num(r.x), num(r.y + y), num(r.right()), num(r.y + y)),
+                    );
+                }
+            }
+        }
+        ShapeKind::StateEnd => {
+            let inner = Rect {
+                x: r.x + 4.0,
+                y: r.y + 4.0,
+                w: (r.w - 8.0).max(0.0),
+                h: (r.h - 8.0).max(0.0),
+            };
+            let _ = writeln!(
+                out,
+                "<path d=\"{}\" {} stroke=\"none\"/>",
+                outline_d(ShapeKind::Circle, inner, m.radius),
+                paint_attr("fill", paint.stroke),
+            );
+        }
+        ShapeKind::Note => {
+            let cut = 10.0f32.min(r.w / 2.0).min(r.h / 2.0);
+            line(
+                out,
+                &format!(
+                    "M{} {}L{} {}L{} {}",
+                    num(r.right() - cut),
+                    num(r.y),
+                    num(r.right() - cut),
+                    num(r.y + cut),
+                    num(r.right()),
+                    num(r.y + cut)
+                ),
+            );
+        }
         ShapeKind::DoubleCircle => {
             let inner = Rect {
                 x: r.x + 5.0,
@@ -475,17 +667,48 @@ fn write_node(
         _ => {}
     }
     let [cx, cy] = r.center();
-    text_block(
-        out,
-        &n.text.lines,
-        cx,
-        cy + text_dy,
-        m.line_height,
-        m.font_size,
-        500,
-        paint.text,
-        family,
-    );
+    if let Some(rec) = &n.record {
+        for row in &rec.rows {
+            for (x, cell) in &row.cells {
+                if row.header {
+                    text_block(
+                        out,
+                        std::slice::from_ref(cell),
+                        cx,
+                        r.y + row.y,
+                        m.line_height,
+                        m.font_size,
+                        600,
+                        paint.text,
+                        family,
+                    );
+                } else {
+                    let _ = writeln!(
+                        out,
+                        "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\" font-weight=\"400\" {}>{}</text>",
+                        num(r.x + x),
+                        num(r.y + row.y + rec.member_font * BASELINE),
+                        esc(family),
+                        num(rec.member_font),
+                        paint_attr("fill", paint.text),
+                        esc(cell)
+                    );
+                }
+            }
+        }
+    } else {
+        text_block(
+            out,
+            &n.text.lines,
+            cx,
+            cy + text_dy,
+            m.line_height,
+            m.font_size,
+            500,
+            paint.text,
+            family,
+        );
+    }
     out.push_str("</g>\n");
 }
 
@@ -533,6 +756,9 @@ pub fn to_svg(
             num(h),
             paint_attr("fill", style.colors(dark).canvas)
         );
+    }
+    for d in &scene.decor {
+        write_decor(&mut out, d, style, dark, font_family);
     }
     for c in &scene.clusters {
         write_cluster(&mut out, scene, c, style, dark, font_family);
