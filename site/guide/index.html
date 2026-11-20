@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tidemap guide: install, Mermaid syntax, shortcuts, styling and FAQ</title>
+  <meta name="description" content="How to install Tidemap on Windows, macOS and Linux, which Mermaid syntax it reads, every keyboard shortcut, style.json, export, file safety, benchmarks and answers to common questions.">
+  <link rel="canonical" href="https://zokirjonkodirov.github.io/tidemap/guide/">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FAFAF8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1B1D20" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="alternate" type="text/plain" href="../llms-full.txt" title="This guide as plain text">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Tidemap">
+  <meta property="og:title" content="Tidemap guide">
+  <meta property="og:description" content="Install, supported Mermaid syntax, keyboard shortcuts, styling, export and FAQ for Tidemap, the native Mermaid viewer and editor.">
+  <meta property="og:url" content="https://zokirjonkodirov.github.io/tidemap/guide/">
+  <meta property="og:image" content="https://zokirjonkodirov.github.io/tidemap/assets/card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preload" href="../assets/fonts/inter-400.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="../assets/fonts/inter-600.woff" as="font" type="font/woff" crossorigin>
+  <link rel="stylesheet" href="../assets/site.css">
+  <script>document.documentElement.classList.add("js")</script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        "@id": "https://zokirjonkodirov.github.io/tidemap/guide/#article",
+        "headline": "Tidemap guide",
+        "description": "Install, supported Mermaid syntax, keyboard shortcuts, styling, export, file safety, benchmarks and FAQ for Tidemap 0.4.0.",
+        "inLanguage": "en",
+        "dateModified": "2026-11-20",
+        "proficiencyLevel": "Beginner",
+        "about": { "@id": "https://zokirjonkodirov.github.io/tidemap/#app" },
+        "mainEntityOfPage": "https://zokirjonkodirov.github.io/tidemap/guide/"
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Tidemap", "item": "https://zokirjonkodirov.github.io/tidemap/" },
+          { "@type": "ListItem", "position": 2, "name": "Guide", "item": "https://zokirjonkodirov.github.io/tidemap/guide/" }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Does Tidemap need an internet connection?", "acceptedAnswer": { "@type": "Answer", "text": "No. Tidemap has no network code. It reads and writes the local files you open, and remote images in Markdown are not fetched." } },
+          { "@type": "Question", "name": "Is Tidemap built on Electron or a web view?", "acceptedAnswer": { "@type": "Answer", "text": "No. Tidemap is written in Rust with the egui toolkit. Its own engine parses, lays out and draws Mermaid diagrams. No JavaScript runs." } },
+          { "@type": "Question", "name": "Will diagrams look the same as on GitHub or in Mermaid Live?", "acceptedAnswer": { "@type": "Answer", "text": "The structure is the same but the picture is not identical. Tidemap reads Mermaid syntax and lays diagrams out with its own engine, so positions and edge routes differ from Mermaid.js. %%{init}%% themes are ignored." } },
+          { "@type": "Question", "name": "Which Mermaid diagram types does Tidemap support?", "acceptedAnswer": { "@type": "Answer", "text": "22 families: flowchart, sequence, class, state, entity relationship, Gantt, pie, mindmap, timeline, user journey, git graph, quadrant chart, XY chart, sankey, C4, architecture, block, requirement, packet, kanban, radar and treemap. Other keywords, such as zenuml, show a 'not supported' card and stay editable." } },
+          { "@type": "Question", "name": "How large can a diagram be?", "acceptedAnswer": { "@type": "Answer", "text": "Up to 20,000 nodes and edges and 2 MiB of source. A generated 10,000-node chain is parsed, laid out and built in about 23 ms on an Intel Core i7-14700K." } },
+          { "@type": "Question", "name": "Can Tidemap export diagrams?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Export a diagram as SVG, or as PNG at 1x, 2x or 3x, in the appearance on screen. The shortcut is Ctrl+Shift+X (Cmd+Shift+X on macOS)." } },
+          { "@type": "Question", "name": "macOS says Tidemap cannot be opened. What do I do?", "acceptedAnswer": { "@type": "Answer", "text": "Tidemap is not signed yet. The first time, right-click the app and choose Open, or run: xattr -d com.apple.quarantine tidemap" } },
+          { "@type": "Question", "name": "Can I change Tidemap's diagram colours?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Colours and geometry live in style.json, which Tidemap reloads while it runs. Settings has an Open style file button." } }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M3.75 6.25 8 10.5l4.25-4.25"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="../" aria-label="Tidemap home"><img src="../assets/icon.svg" width="30" height="30" alt="">Tidemap</a>
+    <nav class="nav" aria-label="Main">
+      <a class="wide" href="../#diagrams">Diagrams</a>
+      <a href="./" aria-current="page">Guide</a>
+      <a href="https://github.com/zokirjonkodirov/tidemap">GitHub</a>
+      <a class="btn soft wide" href="../#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap doc">
+  <aside class="toc">
+    <details open>
+      <summary>On this page<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+      <nav aria-label="On this page">
+        <h2 class="vh">On this page</h2>
+        <ol>
+          <li><a href="#about">What Tidemap is</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#start">First steps</a></li>
+          <li><a href="#syntax">Mermaid syntax</a></li>
+          <li><a href="#differences">Differences from Mermaid.js</a></li>
+          <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+          <li><a href="#styling">Styling with style.json</a></li>
+          <li><a href="#export">Export</a></li>
+          <li><a href="#files">Files and safety</a></li>
+          <li><a href="#performance">Performance</a></li>
+          <li><a href="#appearance">Appearance and motion</a></li>
+          <li><a href="#build">Build from source</a></li>
+          <li><a href="#faq">Questions</a></li>
+        </ol>
+      </nav>
+    </details>
+  </aside>
+
+  <main id="main" class="prose">
+    <h1>Tidemap guide</h1>
+    <p class="lede">Everything about version 0.4.0, on one page. Shortcuts are written with <kbd data-literal>Ctrl</kbd>; on macOS use <kbd data-literal>⌘</kbd>.</p>
+
+    <section id="about" aria-labelledby="about-h">
+      <h2 id="about-h"><a href="#about">What Tidemap is</a></h2>
+      <p class="defn">Tidemap is a desktop app for reading and editing Mermaid diagrams that live in local Markdown (<code>.md</code>) and Mermaid (<code>.mmd</code>) files.</p>
+      <p>It is written in Rust. The interface uses egui, and an engine written for Tidemap parses Mermaid source, lays diagrams out and draws them. There is no Electron, no web view and no JavaScript, and the app works without a network connection. It runs on Windows, macOS and Linux as a single executable of about 20 MB.</p>
+      <p>Open a folder and Tidemap lists its Markdown and Mermaid files. Markdown files open as a rendered page with each Mermaid block drawn inline; a diagram opens on a canvas with pan, zoom, a minimap, an outline and search. The source editor sits beside the canvas and the picture follows it as you type.</p>
+    </section>
+
+    <section id="install" aria-labelledby="install-h">
+      <h2 id="install-h"><a href="#install">Install</a></h2>
+      <p>Download the archive for your system from the <a href="https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.4.0">0.4.0 release</a>. There is no installer: extract the archive and run the app from wherever you put it.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">System</th><th scope="col">Archive</th><th scope="col" class="r">Size</th></tr></thead>
+          <tbody>
+            <tr><td>Windows x86_64</td><td><a href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-pc-windows-msvc.zip"><code>Tidemap-0.4.0-x86_64-pc-windows-msvc.zip</code></a></td><td class="r">18.5 MB</td></tr>
+            <tr><td>macOS, Apple silicon</td><td><a href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-aarch64-apple-darwin.tar.gz"><code>Tidemap-0.4.0-aarch64-apple-darwin.tar.gz</code></a></td><td class="r">7.2 MB</td></tr>
+            <tr><td>macOS, Intel</td><td><a href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-apple-darwin.tar.gz"><code>Tidemap-0.4.0-x86_64-apple-darwin.tar.gz</code></a></td><td class="r">7.5 MB</td></tr>
+            <tr><td>Linux x86_64</td><td><a href="https://github.com/zokirjonkodirov/tidemap/releases/download/v0.4.0/Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz"><code>Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz</code></a></td><td class="r">10.9 MB</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="install-windows">Windows</h3>
+      <p>Unzip the archive anywhere and run <code>Tidemap.exe</code>. To check the download, compare the hash PowerShell prints with the one in the <code>.sha256</code> file:</p>
+      <pre><code>Get-FileHash .\Tidemap-0.4.0-x86_64-pc-windows-msvc.zip -Algorithm SHA256</code></pre>
+
+      <h3 id="install-macos">macOS</h3>
+      <p>Check the download, extract it and run <code>tidemap</code>:</p>
+      <pre><code>shasum -a 256 -c Tidemap-0.4.0-aarch64-apple-darwin.tar.gz.sha256
+tar -xzf Tidemap-0.4.0-aarch64-apple-darwin.tar.gz</code></pre>
+      <p>The app is not signed yet, so macOS stops it the first time. Right-click <code>tidemap</code> and choose Open, or clear the quarantine flag:</p>
+      <pre><code>xattr -d com.apple.quarantine tidemap</code></pre>
+
+      <h3 id="install-linux">Linux</h3>
+      <pre><code>sha256sum -c Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf Tidemap-0.4.0-x86_64-unknown-linux-gnu.tar.gz</code></pre>
+      <p>Run <code>tidemap</code>. File dialogs need GTK 3. The archive includes <code>tidemap.desktop</code> and <code>tidemap.png</code> for a launcher entry.</p>
+    </section>
+
+    <section id="start" aria-labelledby="start-h">
+      <h2 id="start-h"><a href="#start">First steps</a></h2>
+      <ol>
+        <li><strong>Open a folder</strong> with <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>O</kbd>, or one file with <kbd>Ctrl</kbd> <kbd>O</kbd>. The sidebar shows the folder as a searchable tree, with the number of diagrams beside each Markdown file. Recent folders come back with <kbd>Ctrl</kbd> <kbd>R</kbd>.</li>
+        <li><strong>Pick a file.</strong> A Markdown file opens as a page, with headings, lists, tables, quotes, code, links, selectable text and every Mermaid block drawn in place. A <code>.mmd</code> file opens on the canvas.</li>
+        <li><strong>Open a diagram</strong> from a page by double-clicking it. <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>M</kbd> switches between page and diagram, and <kbd>[</kbd> and <kbd>]</kbd> step through the diagrams in the file.</li>
+        <li><strong>Edit.</strong> <kbd>Ctrl</kbd> <kbd>E</kbd> opens the source beside the canvas, with a tab for the current diagram and one for the full file. The picture follows your typing; on a syntax error the last good picture stays up.</li>
+        <li><strong>Follow a node.</strong> Click a node to light up its neighbours and jump to its source line. Click a line to find its node. <kbd>Esc</kbd> clears the selection.</li>
+        <li><strong>Find anything.</strong> <kbd>Ctrl</kbd> <kbd>P</kbd> finds files and diagrams; type <kbd>&gt;</kbd> for commands. <kbd>Ctrl</kbd> <kbd>F</kbd> searches the labels of the open diagram, or the page.</li>
+        <li><strong>Save and export.</strong> <kbd>Ctrl</kbd> <kbd>S</kbd> saves, <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>X</kbd> exports SVG or PNG.</li>
+      </ol>
+    </section>
+
+    <section id="syntax" aria-labelledby="syntax-h">
+      <h2 id="syntax-h"><a href="#syntax">Mermaid syntax</a></h2>
+      <p>Tidemap reads Mermaid blocks fenced as <code>```mermaid</code> in Markdown, and whole <code>.mmd</code> files. These families are drawn:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Family</th><th scope="col">Keyword</th><th scope="col">What is read</th></tr></thead>
+          <tbody>
+            <tr><td>Flowchart</td><td><code>flowchart</code>, <code>graph</code></td><td>All directions, all 14 node shapes and the <code>@{ shape }</code> form, every edge kind and label, subgraphs, <code>classDef</code>, <code>class</code>, <code>style</code>, <code>linkStyle</code>.</td></tr>
+            <tr><td>Sequence</td><td><code>sequenceDiagram</code></td><td>Participants and actors with aliases, every message arrow, activations, notes, <code>loop</code>, <code>alt</code>, <code>opt</code>, <code>par</code>, <code>critical</code>, <code>break</code>, <code>rect</code>, <code>autonumber</code>. <code>box</code> is ignored.</td></tr>
+            <tr><td>Class</td><td><code>classDiagram</code></td><td>Annotations, attributes, methods, generics, all relation markers, cardinalities, labels, notes, namespaces.</td></tr>
+            <tr><td>State</td><td><code>stateDiagram-v2</code></td><td>Transitions, <code>[*]</code>, composite states, descriptions, choice, fork and join, notes, <code>direction</code>, styling. Concurrent regions are ignored.</td></tr>
+            <tr><td>Entity relationship</td><td><code>erDiagram</code></td><td>Entities with typed attributes and PK, FK, UK keys, crow's foot cardinalities, identifying and non-identifying lines.</td></tr>
+            <tr><td>Gantt</td><td><code>gantt</code></td><td>Title, <code>dateFormat</code>, sections, <code>crit</code>, <code>active</code>, <code>done</code>, <code>milestone</code>, dates, durations, <code>after</code>.</td></tr>
+            <tr><td>Pie</td><td><code>pie</code></td><td>Title, <code>showData</code>, slices.</td></tr>
+            <tr><td>Mindmap</td><td><code>mindmap</code></td><td>Indented tree with node shapes, drawn left to right.</td></tr>
+            <tr><td>Timeline</td><td><code>timeline</code></td><td>Title, sections, periods with several events.</td></tr>
+            <tr><td>User journey</td><td><code>journey</code></td><td>Title, sections, tasks with scores and actors.</td></tr>
+            <tr><td>Git graph</td><td><code>gitGraph</code></td><td>Commits with ids, tags and types, branches, checkout, merge, cherry-pick, LR and TB.</td></tr>
+            <tr><td>Quadrant chart</td><td><code>quadrantChart</code></td><td>Axes, quadrant titles, points.</td></tr>
+            <tr><td>XY chart</td><td><code>xychart-beta</code></td><td>Title, categorical or numeric x axis, y range, bar and line series.</td></tr>
+            <tr><td>Sankey</td><td><code>sankey-beta</code></td><td>CSV rows of source, target, value.</td></tr>
+            <tr><td>C4</td><td><code>C4Context</code> and siblings</td><td>Person, System, Container, Component with external, database and queue variants, boundaries, relationships.</td></tr>
+            <tr><td>Architecture</td><td><code>architecture-beta</code></td><td>Nested groups, services, junctions, edges.</td></tr>
+            <tr><td>Block</td><td><code>block-beta</code></td><td>Columns, spans, <code>space</code>, block shapes, labelled arrows.</td></tr>
+            <tr><td>Requirement</td><td><code>requirementDiagram</code></td><td>All requirement kinds, elements, relationships.</td></tr>
+            <tr><td>Packet</td><td><code>packet-beta</code></td><td>Title, bit ranges, 32 bits per row.</td></tr>
+            <tr><td>Kanban</td><td><code>kanban</code></td><td>Columns with cards.</td></tr>
+            <tr><td>Radar</td><td><code>radar-beta</code></td><td>Axes, curves, min, max, ticks, graticule.</td></tr>
+            <tr><td>Treemap</td><td><code>treemap-beta</code></td><td>Indented sections and valued leaves.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Any other first word, for example <code>zenuml</code>, <code>venn</code> or <code>ishikawa</code>, shows a card that says the family is not supported yet. The source stays editable. The complete notes, rule by rule, are in <a href="https://github.com/zokirjonkodirov/tidemap/blob/main/docs/COMPATIBILITY.md">COMPATIBILITY.md</a>.</p>
+    </section>
+
+    <section id="differences" aria-labelledby="differences-h">
+      <h2 id="differences-h"><a href="#differences">Differences from Mermaid.js</a></h2>
+      <ul>
+        <li>Layout is Tidemap's own. The same source gives the same structure, but node positions and edge routes differ from what GitHub or Mermaid Live draw.</li>
+        <li><code>%%{init}%%</code> directives and themes are skipped. Colours come from Tidemap's palette, <code>classDef</code> and <code>style</code>, or your <a href="#styling">style.json</a>.</li>
+        <li>There is no JavaScript fallback: a family the engine does not know is shown as unsupported, not drawn another way.</li>
+        <li>A diagram may hold up to 20,000 nodes and edges and 2 MiB of source.</li>
+        <li>Arrowheads are rounded and follow the curve of the edge.</li>
+      </ul>
+    </section>
+
+    <section id="shortcuts" aria-labelledby="shortcuts-h">
+      <h2 id="shortcuts-h"><a href="#shortcuts">Keyboard shortcuts</a></h2>
+      <p>The same list is in the app under <kbd>Ctrl</kbd> <kbd>/</kbd>. Single keys work while you are not typing and no dialog is open.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Action</th><th scope="col" class="r">Keys</th></tr></thead>
+          <tbody>
+            <tr><td>Find a file or diagram</td><td class="r"><kbd>Ctrl</kbd> <kbd>P</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd></td></tr>
+            <tr><td>Run a command</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd></td></tr>
+            <tr><td>Switch project</td><td class="r"><kbd>Ctrl</kbd> <kbd>R</kbd></td></tr>
+            <tr><td>Open folder</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>O</kbd></td></tr>
+            <tr><td>Open file</td><td class="r"><kbd>Ctrl</kbd> <kbd>O</kbd></td></tr>
+            <tr><td>New diagram</td><td class="r"><kbd>Ctrl</kbd> <kbd>N</kbd></td></tr>
+            <tr><td>Save</td><td class="r"><kbd>Ctrl</kbd> <kbd>S</kbd></td></tr>
+            <tr><td>Save a copy</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd></td></tr>
+            <tr><td>Show or hide source</td><td class="r"><kbd>Ctrl</kbd> <kbd>E</kbd></td></tr>
+            <tr><td>Show or hide sidebar</td><td class="r"><kbd>Ctrl</kbd> <kbd>B</kbd></td></tr>
+            <tr><td>Go to the file tree</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>E</kbd></td></tr>
+            <tr><td>Search files in the sidebar</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> or <kbd>/</kbd></td></tr>
+            <tr><td>Previous file</td><td class="r"><kbd>Ctrl</kbd> <kbd>Tab</kbd></td></tr>
+            <tr><td>Pin or unpin file</td><td class="r"><kbd>Ctrl</kbd> <kbd>D</kbd></td></tr>
+            <tr><td>Back, forward</td><td class="r"><kbd>Alt</kbd> <kbd>←</kbd>, <kbd>Alt</kbd> <kbd>→</kbd></td></tr>
+            <tr><td>Previous, next diagram</td><td class="r"><kbd>[</kbd>, <kbd>]</kbd> or <kbd>Alt</kbd> <kbd>PgUp</kbd>, <kbd>Alt</kbd> <kbd>PgDn</kbd></td></tr>
+            <tr><td>Page or diagram</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>M</kbd></td></tr>
+            <tr><td>Find in diagram</td><td class="r"><kbd>Ctrl</kbd> <kbd>F</kbd></td></tr>
+            <tr><td>Show or hide outline</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd></td></tr>
+            <tr><td>Fit diagram</td><td class="r"><kbd>F</kbd> or <kbd>0</kbd></td></tr>
+            <tr><td>Actual size</td><td class="r"><kbd>1</kbd></td></tr>
+            <tr><td>Zoom in, out</td><td class="r"><kbd>=</kbd>, <kbd>-</kbd></td></tr>
+            <tr><td>Export diagram</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>X</kbd></td></tr>
+            <tr><td>Light or dark</td><td class="r"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd></td></tr>
+            <tr><td>Settings</td><td class="r"><kbd>Ctrl</kbd> <kbd>,</kbd></td></tr>
+            <tr><td>All shortcuts</td><td class="r"><kbd>Ctrl</kbd> <kbd>/</kbd>, <kbd>F1</kbd> or <kbd>?</kbd></td></tr>
+            <tr><td>Clear selection, close</td><td class="r"><kbd>Esc</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Toggle reduced motion has no shortcut; run it from the command palette.</p>
+    </section>
+
+    <section id="styling" aria-labelledby="styling-h">
+      <h2 id="styling-h"><a href="#styling">Styling with style.json</a></h2>
+      <p>Diagram colours and geometry live in <code>style.json</code>. Tidemap writes it with the defaults on first start, checks it about once a second and redraws when it changes. A file that does not parse is not used; the last good style stays and the app names the line at fault. Settings has an <strong>Open style file</strong> button.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">System</th><th scope="col">Location</th></tr></thead>
+          <tbody>
+            <tr><td>Windows</td><td><code>%LOCALAPPDATA%\Tidemap\Tidemap\data\style.json</code></td></tr>
+            <tr><td>macOS</td><td><code>~/Library/Application Support/dev.Tidemap.Tidemap/style.json</code></td></tr>
+            <tr><td>Linux</td><td><code>~/.local/share/tidemap/style.json</code> (or under <code>$XDG_DATA_HOME</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The <code>TIDEMAP_DATA_DIR</code> environment variable moves this folder. Missing fields take their defaults and values out of range are clamped.</p>
+      <pre><code>{
+  "metrics": { "font_size": 14.0, "rank_gap": 64.0, "node_gap": 40.0, "radius": 12.0 },
+  "light": { "edge": [138, 145, 156, 255], "sky": { "fill": [220, 235, 250, 255], "stroke": [143, 184, 224, 255] } },
+  "dark": { "canvas": [27, 29, 32, 255] },
+  "color_by": "Subgraph",
+  "edge_width": 1.5,
+  "arrow_size": 7.0,
+  "node_stroke": 1.0,
+  "cluster_tint": 0.35
+}</code></pre>
+      <ul>
+        <li><code>metrics</code>: <code>font_size</code> (11 to 24), <code>line_height</code>, <code>max_label_width</code> (80 to 600), <code>pad_x</code> and <code>pad_y</code> (4 to 48), <code>radius</code> (4 to 32), <code>rank_gap</code> and <code>node_gap</code> (16 to 240), <code>edge_label_font</code>, <code>cluster_pad</code>, <code>cluster_title</code>, <code>width_step</code>.</li>
+        <li><code>light</code> and <code>dark</code>: <code>canvas</code>, <code>text</code>, <code>edge</code>, <code>label_bg</code>, and the swatches <code>sky</code>, <code>peach</code>, <code>mint</code>, <code>yellow</code>, <code>lavender</code>, <code>gray</code> and <code>rose</code>, each with a <code>fill</code> and a <code>stroke</code>. Colours are <code>[red, green, blue, alpha]</code> from 0 to 255.</li>
+        <li><code>color_by</code>: <code>"Role"</code> colours flowchart nodes by shape (process, decision, data store, start and end, external); <code>"Subgraph"</code> gives each top-level subgraph its own swatch.</li>
+        <li>Colours set in the diagram with <code>classDef</code> or <code>style</code> always win.</li>
+      </ul>
+    </section>
+
+    <section id="export" aria-labelledby="export-h">
+      <h2 id="export-h"><a href="#export">Export</a></h2>
+      <p><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>X</kbd> or the export button on the canvas exports the open diagram as SVG, or as PNG at 1x, 2x or 3x. Exports use the appearance on screen, light or dark.</p>
+      <p>From a terminal, <code>TIDEMAP_EXPORT</code> exports the first diagram of a file and exits:</p>
+      <pre><code># macOS and Linux
+TIDEMAP_EXPORT=flow.svg ./tidemap docs/README.md
+TIDEMAP_EXPORT=flow.png TIDEMAP_EXPORT_SCALE=2 TIDEMAP_SHOT_THEME=dark ./tidemap flow.mmd
+
+# Windows PowerShell
+$env:TIDEMAP_EXPORT = "flow.svg"; .\Tidemap.exe docs\README.md</code></pre>
+      <p>Every diagram on the <a href="../#diagrams">home page</a> was made this way.</p>
+    </section>
+
+    <section id="files" aria-labelledby="files-h">
+      <h2 id="files-h"><a href="#files">Files and safety</a></h2>
+      <ul>
+        <li><strong>No network.</strong> Tidemap has no network code. Remote images in Markdown are not fetched.</li>
+        <li><strong>Atomic saves.</strong> A save replaces the file in one step, so a crash mid-save cannot leave half a file.</li>
+        <li><strong>Conflicts ask first.</strong> Before saving, Tidemap checks that the file on disk is the one you opened. If another program changed it, you choose to compare, reload or save your edits as a copy.</li>
+        <li><strong>Crash recovery.</strong> Unsaved edits are journalled in the data folder and offered back the next time the file opens.</li>
+        <li><strong>Autosave</strong> is a setting. When on, Tidemap saves after a pause in typing and never over a conflict.</li>
+        <li><strong>Read-only files</strong> open normally; save a copy to keep changes.</li>
+      </ul>
+    </section>
+
+    <section id="performance" aria-labelledby="performance-h">
+      <h2 id="performance-h"><a href="#performance">Performance</a></h2>
+      <p>Parse, layout and scene build of generated flowcharts. Best of 5 runs, release build, Intel Core i7-14700K with 20 cores; layout runs on several threads. The engine only: window start-up and painting are not counted. Reproduce with <code>cargo native bench</code>.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Shape</th><th scope="col" class="r">Nodes</th><th scope="col" class="r">Edges</th><th scope="col" class="r">Parse</th><th scope="col" class="r">Layout</th><th scope="col" class="r">Scene</th><th scope="col" class="r">Total</th></tr></thead>
+          <tbody>
+            <tr><td>Chain</td><td class="r">200</td><td class="r">199</td><td class="r">0.1 ms</td><td class="r">0.3 ms</td><td class="r">0.0 ms</td><td class="r"><strong>0.5 ms</strong></td></tr>
+            <tr><td>Chain</td><td class="r">2,000</td><td class="r">1,999</td><td class="r">1.1 ms</td><td class="r">3.4 ms</td><td class="r">0.5 ms</td><td class="r"><strong>5.1 ms</strong></td></tr>
+            <tr><td>Chain</td><td class="r">10,000</td><td class="r">9,999</td><td class="r">5.7 ms</td><td class="r">14.1 ms</td><td class="r">3.1 ms</td><td class="r"><strong>22.9 ms</strong></td></tr>
+            <tr><td>Tree</td><td class="r">200</td><td class="r">199</td><td class="r">0.1 ms</td><td class="r">0.5 ms</td><td class="r">0.0 ms</td><td class="r"><strong>0.6 ms</strong></td></tr>
+            <tr><td>Tree</td><td class="r">2,000</td><td class="r">1,999</td><td class="r">1.1 ms</td><td class="r">7.0 ms</td><td class="r">0.5 ms</td><td class="r"><strong>8.6 ms</strong></td></tr>
+            <tr><td>Tree</td><td class="r">10,000</td><td class="r">9,999</td><td class="r">5.4 ms</td><td class="r">14.1 ms</td><td class="r">3.0 ms</td><td class="r"><strong>22.6 ms</strong></td></tr>
+            <tr><td>Dense layers</td><td class="r">200</td><td class="r">360</td><td class="r">0.2 ms</td><td class="r">2.4 ms</td><td class="r">0.1 ms</td><td class="r"><strong>2.7 ms</strong></td></tr>
+            <tr><td>Dense layers</td><td class="r">2,000</td><td class="r">3,960</td><td class="r">1.9 ms</td><td class="r">23.4 ms</td><td class="r">0.8 ms</td><td class="r"><strong>26.2 ms</strong></td></tr>
+            <tr><td>Dense layers</td><td class="r">10,000</td><td class="r">19,960</td><td class="r">9.4 ms</td><td class="r">317.7 ms</td><td class="r">9.2 ms</td><td class="r"><strong>336.3 ms</strong></td></tr>
+            <tr><td>Subgraphs</td><td class="r">200</td><td class="r">212</td><td class="r">0.1 ms</td><td class="r">5.8 ms</td><td class="r">0.1 ms</td><td class="r"><strong>5.9 ms</strong></td></tr>
+            <tr><td>Subgraphs</td><td class="r">2,000</td><td class="r">2,120</td><td class="r">0.8 ms</td><td class="r">38.2 ms</td><td class="r">0.6 ms</td><td class="r"><strong>39.6 ms</strong></td></tr>
+            <tr><td>Subgraphs</td><td class="r">10,000</td><td class="r">10,600</td><td class="r">4.5 ms</td><td class="r">99.7 ms</td><td class="r">4.5 ms</td><td class="r"><strong>108.7 ms</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The source editor lays out only the lines on screen, so typing, selecting and moving cost the same in a 400,000-line file as in a 10-line one.</p>
+    </section>
+
+    <section id="appearance" aria-labelledby="appearance-h">
+      <h2 id="appearance-h"><a href="#appearance">Appearance and motion</a></h2>
+      <ul>
+        <li>Light and dark appearances, switched with <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd> or the button in the top bar. Diagrams have their own palette for each.</li>
+        <li>Motion follows the system's animation setting. Settings has a Motion row (System, Reduced, Full) to override it. Reduced keeps fades and drops movement.</li>
+        <li>Text is set in Inter and code in IBM Plex Mono, both bundled.</li>
+      </ul>
+    </section>
+
+    <section id="build" aria-labelledby="build-h">
+      <h2 id="build-h"><a href="#build">Build from source</a></h2>
+      <p>The Rust toolchain is pinned in <code>rust-toolchain.toml</code>. From a clone of the <a href="https://github.com/zokirjonkodirov/tidemap">repository</a>:</p>
+      <pre><code>cargo native build     # release build
+cargo native run       # open the app
+cargo native package   # portable archive in release/
+cargo native bench     # engine timings
+cargo test --workspace # app and engine tests</code></pre>
+      <ul>
+        <li>Windows: the GNU or MSVC toolchain.</li>
+        <li>macOS: nothing extra.</li>
+        <li>Linux: <code>sudo apt install libgtk-3-dev libxkbcommon-dev libwayland-dev libx11-dev</code> or your distribution's equivalent.</li>
+      </ul>
+    </section>
+
+    <section id="faq" class="faq" aria-labelledby="faq-h">
+      <h2 id="faq-h"><a href="#faq">Questions</a></h2>
+      <details>
+        <summary>Does Tidemap need an internet connection?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>No. Tidemap has no network code. It reads and writes the local files you open, and remote images in Markdown are not fetched.</p></div>
+      </details>
+      <details>
+        <summary>Is it built on Electron or a web view?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>No. Tidemap is written in Rust with the egui toolkit, and its own engine parses, lays out and draws the diagrams. No JavaScript runs.</p></div>
+      </details>
+      <details>
+        <summary>Will diagrams look the same as on GitHub or in Mermaid Live?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>The structure is the same; the picture is not identical. Tidemap lays diagrams out with its own engine, so positions and edge routes differ from Mermaid.js, and <code>%%{init}%%</code> themes are ignored. See <a href="#differences">differences</a>.</p></div>
+      </details>
+      <details>
+        <summary>Which diagram types are supported?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>22 families: flowchart, sequence, class, state, entity relationship, Gantt, pie, mindmap, timeline, user journey, git graph, quadrant chart, XY chart, sankey, C4, architecture, block, requirement, packet, kanban, radar and treemap. Others show a "not supported" card and stay editable. See <a href="#syntax">syntax</a>.</p></div>
+      </details>
+      <details>
+        <summary>How large can a diagram be?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>Up to 20,000 nodes and edges and 2 MiB of source. A generated 10,000-node chain is parsed, laid out and built in about 23 ms; see <a href="#performance">performance</a>.</p></div>
+      </details>
+      <details>
+        <summary>Can I export diagrams?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>Yes: SVG, or PNG at 1x, 2x or 3x, in the appearance on screen. <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>X</kbd> opens the export dialog, and <code>TIDEMAP_EXPORT</code> exports from a terminal; see <a href="#export">export</a>.</p></div>
+      </details>
+      <details>
+        <summary>macOS says the app cannot be opened.<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>Tidemap is not signed yet. The first time, right-click the app and choose Open, or run <code>xattr -d com.apple.quarantine tidemap</code>.</p></div>
+      </details>
+      <details>
+        <summary>Can I change the diagram colours?<svg class="i" aria-hidden="true"><use href="#i-down"/></svg></summary>
+        <div><p>Yes. Colours and geometry live in <code>style.json</code>, which reloads while the app runs; see <a href="#styling">styling</a>. Colours set in a diagram with <code>classDef</code> or <code>style</code> win over it.</p></div>
+      </details>
+    </section>
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <p>Tidemap 0.4.0. Set in Inter and IBM Plex Mono.</p>
+    <nav aria-label="Footer">
+      <a href="../">Home</a>
+      <a href="../#download">Download</a>
+      <a href="https://github.com/zokirjonkodirov/tidemap/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/zokirjonkodirov/tidemap">GitHub</a>
+      <a href="../llms-full.txt">This guide as text</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

@@ -41,6 +41,9 @@ memchr = "2"
 unicode-segmentation = "1"
 pulldown-cmark = "0.13"
 
+[build-dependencies]
+embed-resource = "3"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
 

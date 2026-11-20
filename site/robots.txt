@@ -1,0 +1,5 @@
+# Everything here is public and meant to be read, by people, search engines and language models.
+User-agent: *
+Allow: /
+
+Sitemap: https://zokirjonkodirov.github.io/tidemap/sitemap.xml

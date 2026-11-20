@@ -76,7 +76,9 @@ fn execute() -> Result<()> {
                 .ok_or("The GNU toolchain has no assembler for dlltool. Install MinGW-w64 (for example `scoop install mingw`) and retry.")?;
             fs::copy(assembler, contained.join("as.exe"))?;
         }
-        paths.push(contained);
+        // `contained` stays off PATH: rustc finds its own dlltool and gcc there, and a bare
+        // x86_64-w64-mingw32-gcc on PATH makes it assume an external MinGW and drop the
+        // self-contained crt objects and import libraries, so every link fails.
         paths.push(tools);
     }
     paths.push(sysroot.join("bin"));

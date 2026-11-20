@@ -1,8 +1,8 @@
 //! Empty states, the diagram search overlay and the outline panel.
 
 use egui::{
-    Align, Align2, Area, Context, FontId, Id, Layout, Margin, Order, Rect, RichText, Sense, Ui, UiBuilder,
-    pos2, vec2,
+    Align, Align2, Area, Color32, ColorImage, Context, FontId, Id, Layout, Margin, Order, Rect, RichText, Sense,
+    TextureFilter, TextureHandle, TextureOptions, Ui, UiBuilder, pos2, vec2,
 };
 
 use super::{
@@ -20,7 +20,7 @@ const COLUMN_WIDTH: f32 = 420.0;
 /// Width of the list rows (recent folders, recoverable files).
 const LIST_WIDTH: f32 = 360.0;
 const LIST_ROW: f32 = 40.0;
-const LOGO_SIZE: f32 = 56.0;
+const LOGO_SIZE: f32 = 64.0;
 const SEARCH_FIELD_WIDTH: f32 = 300.0;
 const SEARCH_TOP: f32 = 16.0;
 /// How many recent folders the welcome state lists.
@@ -47,12 +47,25 @@ fn heading(ui: &mut Ui, p: Palette, title: &str, sentence: &str) {
     );
 }
 
-/// A calm 56 px tile with the diagram icon.
-fn logo(ui: &mut Ui, p: Palette) {
+/// The Tidemap mark. Decoded once and kept as a mipmapped texture, so it stays smooth at 64 px
+/// from a 512 px source on any display scale. Nothing is drawn if the image cannot be read.
+fn logo(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(LOGO_SIZE, LOGO_SIZE), Sense::hover());
-    ui.painter().rect_filled(rect, token::RADIUS_DIALOG, p.accent_soft);
-    let icon = Rect::from_center_size(rect.center(), vec2(24.0, 24.0));
-    icons::paint(ui.painter(), Icon::Diagram, icon, p.accent);
+    let id = Id::new("tidemap-mark");
+    let ctx = ui.ctx().clone();
+    let texture = ctx.data(|data| data.get_temp::<TextureHandle>(id)).or_else(|| {
+        let image = image::load_from_memory(crate::MARK_PNG).ok()?.into_rgba8();
+        let size = [image.width() as usize, image.height() as usize];
+        let pixels = ColorImage::from_rgba_unmultiplied(size, image.as_raw());
+        let options = TextureOptions { mipmap_mode: Some(TextureFilter::Linear), ..TextureOptions::LINEAR };
+        let texture = ctx.load_texture("tidemap-mark", pixels, options);
+        ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+        Some(texture)
+    });
+    if let Some(texture) = texture {
+        let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+        ui.painter().image(texture.id(), rect, uv, Color32::WHITE);
+    }
 }
 
 /// A quiet list row: icon, name, and a muted detail on the right. Returns the row's response.
@@ -90,7 +103,7 @@ pub fn welcome(app: &mut TidemapApp, ui: &mut Ui, p: Palette) {
     let mut open_folder = None;
     let mut recover = None;
     column(ui, 0.2, |ui| {
-        logo(ui, p);
+        logo(ui);
         ui.add_space(token::SPACE[3]);
         heading(
             ui,
