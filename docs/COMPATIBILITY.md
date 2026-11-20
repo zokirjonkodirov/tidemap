@@ -17,7 +17,18 @@ Last updated 19 November 2026. This describes what the in-house engine (`crates/
 | User journey | `journey` | `title`, sections, tasks with score and actors. |
 | Quadrant chart | `quadrantChart` | Axes, four quadrant titles, points. Point styling is ignored. |
 | Mindmap | `mindmap` | Indentation tree, node shapes `[ ] ( ) (( )) )) (( {{ }}`. Drawn left to right. |
-| Everything else (git graph, sankey, xychart, requirement, block, C4, architecture, packet, kanban, radar, treemap) | any other first word | Not supported yet |
+| Git graph | `gitGraph` | `commit` (id, tag, type), `branch`, `checkout`/`switch`, `merge`, `cherry-pick`, `LR`/`TB` orientation. Branch `order` and themes are ignored. |
+| Sankey | `sankey-beta`, `sankey` | CSV rows `source,target,value`. Link colours follow the source node. |
+| XY chart | `xychart-beta`, `xychart` | `title`, categorical or numeric `x-axis`, `y-axis` range, any number of `bar` and `line` series. `horizontal` is ignored. |
+| Requirement | `requirementDiagram` | All requirement kinds, elements, `-` relationship `->` (both directions). `style`/`classDef` are skipped. |
+| C4 | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment` | Person, System, Container, Component (with `_Ext`, `Db`, `Queue` variants), boundaries, `Rel`/`BiRel`. Layout updates (`UpdateLayoutConfig`, `Rel_U` hints) are ignored. |
+| Architecture | `architecture-beta` | Groups (nested), services, junctions, edges with optional arrows. Icons only choose cylinder or pill shapes; edge ports are ignored. |
+| Block | `block-beta` | `columns`, spans, `space`, rectangle/rounded/circle/diamond blocks, labelled arrows. Nested `block:` groups are flattened. |
+| Packet | `packet-beta` | `title`, `start-end`, single-bit and `+n` fields, 32 bits per row. |
+| Kanban | `kanban` | Columns with cards. Ticket metadata (`@{ ... }`) is ignored. |
+| Radar | `radar-beta` | `axis`, `curve` lists, `max`, `min`, `ticks`, `graticule`. |
+| Treemap | `treemap-beta` | Indented sections and valued leaves. `classDef` is ignored. |
+| Everything else (for example zenuml, venn, ishikawa) | any other first word | Not supported yet |
 
 A source in an unsupported family shows a card with the title "<Family> diagrams are not supported yet" (or "This diagram type is not supported yet"). The source stays editable. There is no fallback renderer.
 

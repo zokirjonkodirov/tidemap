@@ -1,0 +1,11 @@
+C4Context
+    title System Context diagram for Internet Banking System
+    Person(customer, "Personal Banking Customer", "A customer of the bank")
+    Enterprise_Boundary(b0, "Bank") {
+        System(banking, "Internet Banking System", "Lets customers view their accounts")
+        SystemDb(db, "Mainframe", "Stores core data")
+    }
+    System_Ext(email, "E-mail System", "Sends e-mails")
+    Rel(customer, banking, "Uses", "HTTPS")
+    Rel(banking, db, "Reads from")
+    Rel(banking, email, "Sends e-mails using")

@@ -57,6 +57,13 @@ pub enum Decor {
         fill: Tone,
         stroke: Option<Tone>,
     },
+    /// Filled polygon; `alpha` scales the fill opacity (255 = opaque).
+    Poly {
+        pts: Vec<[f32; 2]>,
+        fill: Tone,
+        stroke: Option<Tone>,
+        alpha: u8,
+    },
     Text {
         at: [f32; 2],
         text: String,
@@ -71,6 +78,14 @@ impl Decor {
     /// Conservative bounds; text is estimated from its length.
     pub fn bounds(&self) -> Rect {
         match self {
+            Decor::Poly { pts, .. } => {
+                let mut r: Option<Rect> = None;
+                for p in pts {
+                    let pr = Rect { x: p[0], y: p[1], w: 0.0, h: 0.0 };
+                    r = Some(r.map_or(pr, |r| r.union(pr)));
+                }
+                r.unwrap_or_default()
+            }
             Decor::Line { pts, width, .. } => {
                 let mut r: Option<Rect> = None;
                 for p in pts {
@@ -117,7 +132,7 @@ impl Decor {
     /// Moves the primitive.
     pub fn translate(&mut self, dx: f32, dy: f32) {
         match self {
-            Decor::Line { pts, .. } => {
+            Decor::Line { pts, .. } | Decor::Poly { pts, .. } => {
                 for p in pts {
                     p[0] += dx;
                     p[1] += dy;

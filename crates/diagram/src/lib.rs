@@ -13,6 +13,12 @@ pub mod seq;
 pub mod decor;
 pub mod charts;
 mod mindmap;
+mod requirement;
+mod c4;
+mod architecture;
+pub mod more;
+mod gitgraph;
+mod block;
 mod class;
 mod er;
 mod linewise;
@@ -67,6 +73,28 @@ pub fn detect(source: &str) -> Family {
         Family::Quadrant
     } else if word == "mindmap" {
         Family::Mindmap
+    } else if word.starts_with("gitGraph") {
+        Family::GitGraph
+    } else if word == "sankey-beta" || word == "sankey" {
+        Family::Sankey
+    } else if word.starts_with("xychart") {
+        Family::XyChart
+    } else if word == "requirementDiagram" {
+        Family::Requirement
+    } else if word.starts_with("C4") {
+        Family::C4
+    } else if word.starts_with("architecture") {
+        Family::Architecture
+    } else if word == "block-beta" || word == "block" {
+        Family::Block
+    } else if word == "packet-beta" || word == "packet" {
+        Family::Packet
+    } else if word == "kanban" {
+        Family::Kanban
+    } else if word == "radar-beta" || word == "radar" {
+        Family::Radar
+    } else if word == "treemap-beta" || word == "treemap" {
+        Family::Treemap
     } else {
         Family::Other
     }

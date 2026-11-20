@@ -1,0 +1,18 @@
+requirementDiagram
+    requirement test_req {
+        id: 1
+        text: the test text.
+        risk: high
+        verifymethod: test
+    }
+    functionalRequirement login_req {
+        id: 1.1
+        text: users can log in
+        risk: medium
+        verifymethod: demonstration
+    }
+    element test_entity {
+        type: simulation
+    }
+    test_entity - satisfies -> test_req
+    test_req - contains -> login_req

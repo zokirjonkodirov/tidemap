@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated 19 November 2026. Version 0.3.0 (Tidemap).
+Last updated 19 November 2026. Version 0.4.0 (Tidemap).
 
 The earlier Electron/TypeScript attempt is discarded; see [BUILD_REPORT.md](BUILD_REPORT.md) for its history only. The active implementation is a native Rust/egui app with an in-house diagram engine ([ADR 001](decisions/001-implementation-runtime.md), [ADR 002](decisions/002-own-diagram-engine.md)).
 

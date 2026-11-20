@@ -29,6 +29,14 @@ pub enum Chart {
     Timeline(Timeline),
     Journey(Journey),
     Quadrant(Quadrant),
+    Git(crate::gitgraph::Git),
+    Sankey(crate::more::Sankey),
+    Xy(crate::more::Xy),
+    Block(crate::block::Block),
+    Packet(crate::more::Packet),
+    Kanban(crate::more::Kanban),
+    Radar(crate::more::Radar),
+    Treemap(crate::more::Treemap),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -128,14 +136,21 @@ pub(crate) fn parse(source: &str, family: Family) -> Parsed {
         Family::Gantt => Chart::Gantt(parse_gantt(source, &body, &mut diags)),
         Family::Timeline => Chart::Timeline(parse_timeline(&body)),
         Family::Journey => Chart::Journey(parse_journey(&body)),
+        Family::GitGraph => Chart::Git(crate::gitgraph::parse(header_rest, &body)),
+        Family::Sankey => Chart::Sankey(crate::more::parse_sankey(&body)),
+        Family::XyChart => Chart::Xy(crate::more::parse_xy(header_rest, &body)),
+        Family::Block => Chart::Block(crate::block::parse(&body)),
+        Family::Packet => Chart::Packet(crate::more::parse_packet(&body)),
+        Family::Kanban => Chart::Kanban(crate::more::parse_kanban(&body)),
+        Family::Radar => Chart::Radar(crate::more::parse_radar(&body)),
+        Family::Treemap => Chart::Treemap(crate::more::parse_treemap(&body)),
         _ => Chart::Quadrant(parse_quadrant(&body)),
     };
     finish(family, chart, diags)
 }
 
 fn is_header(text: &str) -> bool {
-    let w = split_word(text).0;
-    matches!(w, "pie" | "gantt" | "timeline" | "journey" | "quadrantChart")
+    crate::detect(text) != Family::Other
 }
 
 // ---- pie --------------------------------------------------------------------
@@ -502,7 +517,7 @@ fn parse_quadrant(body: &[(Line, &str)]) -> Quadrant {
 
 // ---- layout ------------------------------------------------------------------
 
-fn text(at: [f32; 2], s: &str, size: f32, anchor: Anchor, bold: bool, tone: Tone) -> Decor {
+pub(crate) fn text(at: [f32; 2], s: &str, size: f32, anchor: Anchor, bold: bool, tone: Tone) -> Decor {
     Decor::Text {
         at,
         text: s.to_string(),
@@ -513,7 +528,7 @@ fn text(at: [f32; 2], s: &str, size: f32, anchor: Anchor, bold: bool, tone: Tone
     }
 }
 
-fn rect(x: f32, y: f32, w: f32, h: f32, radius: f32, fill: Tone, stroke: Option<Tone>) -> Decor {
+pub(crate) fn rect(x: f32, y: f32, w: f32, h: f32, radius: f32, fill: Tone, stroke: Option<Tone>) -> Decor {
     Decor::Rect {
         rect: Rect { x, y, w, h },
         radius,
@@ -522,7 +537,7 @@ fn rect(x: f32, y: f32, w: f32, h: f32, radius: f32, fill: Tone, stroke: Option<
     }
 }
 
-fn line(pts: Vec<[f32; 2]>, width: f32, dashed: bool, tone: Tone) -> Decor {
+pub(crate) fn line(pts: Vec<[f32; 2]>, width: f32, dashed: bool, tone: Tone) -> Decor {
     Decor::Line {
         pts,
         width,
@@ -579,6 +594,14 @@ pub(crate) fn layout(
         Chart::Timeline(t) => timeline(t, measurer),
         Chart::Journey(j) => journey(j, measurer),
         Chart::Quadrant(q) => quadrant(q, measurer),
+        Chart::Git(g) => crate::gitgraph::layout(g, measurer),
+        Chart::Sankey(s) => crate::more::layout_sankey(s, measurer),
+        Chart::Xy(x) => crate::more::layout_xy(x, measurer),
+        Chart::Block(b) => crate::block::layout(b, measurer),
+        Chart::Packet(p) => crate::more::layout_packet(p, measurer),
+        Chart::Kanban(k) => crate::more::layout_kanban(k, measurer),
+        Chart::Radar(r) => crate::more::layout_radar(r, measurer),
+        Chart::Treemap(t) => crate::more::layout_treemap(t, measurer),
     };
     let _ = m;
     Ok(assemble(decor))

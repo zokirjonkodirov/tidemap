@@ -4,6 +4,27 @@ All notable changes to Tidemap are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-20
+
+### Added
+
+- **Git graph** (`gitGraph`): branches as lanes, commits with ids, tags, highlight and reverse
+  styles, merges, cherry-picks, horizontal and vertical orientation.
+- **Sankey** (`sankey-beta`): column layout with crossing reduction and curved ribbons.
+- **XY chart** (`xychart-beta`): bar and line series with axes and grid.
+- **Requirement diagrams**: requirement and element boxes with labelled relationships.
+- **C4 diagrams** (`C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment`): C4
+  colours, boundaries, labelled relationships.
+- **Architecture diagrams** (`architecture-beta`): nested groups, services, database shapes, edges.
+- **Block diagrams** (`block-beta`): column grid with spans, shapes and arrows.
+- **Packet diagrams** (`packet-beta`), **kanban** boards, **radar** charts and **treemaps**.
+- Polygon primitive and stronger line colours in the free-form drawing layer.
+
+### Changed
+
+- Every diagram family the engine knows is now drawn; only unknown keywords show the "not
+  supported" card.
+
 ## [0.3.0] - 2026-11-20
 
 ### Added
@@ -37,8 +58,8 @@ All notable changes to Tidemap are recorded here. The format follows
 - State diagram notes are placed above or below their state, not beside it, and concurrent regions
   (`--`) are ignored.
 - Chart-style diagrams (pie, Gantt, timeline, journey, quadrant) are not selectable on the canvas.
-- Not drawn yet: git graph, sankey, xychart, requirement, block, C4, architecture, packet, kanban,
-  radar and treemap diagrams. They show a "not supported" card and the source stays editable.
+- Git graph, sankey, xychart, requirement, block, C4, architecture, packet, kanban, radar and
+  treemap diagrams arrived in 0.4.0.
 
 ## [0.2.0] - 2026-11-19
 
@@ -51,5 +72,6 @@ All notable changes to Tidemap are recorded here. The format follows
 - Motion and depth system, reduced-motion support, crash recovery and safe save.
 - Cross-platform CI and tagged release packaging for Windows, macOS and Linux.
 
+[0.4.0]: https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.4.0
 [0.3.0]: https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.3.0
 [0.2.0]: https://github.com/zokirjonkodirov/tidemap/releases/tag/v0.2.0

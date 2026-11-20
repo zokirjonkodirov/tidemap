@@ -17,9 +17,30 @@ pub fn parse(source: &str) -> Parsed {
     }
     if matches!(
         family,
-        Family::Pie | Family::Gantt | Family::Timeline | Family::Journey | Family::Quadrant
+        Family::Pie
+            | Family::Gantt
+            | Family::Timeline
+            | Family::Journey
+            | Family::Quadrant
+            | Family::GitGraph
+            | Family::Sankey
+            | Family::XyChart
+            | Family::Block
+            | Family::Packet
+            | Family::Kanban
+            | Family::Radar
+            | Family::Treemap
     ) {
         return crate::charts::parse(source, family);
+    }
+    if family == Family::Requirement {
+        return crate::requirement::parse(source);
+    }
+    if family == Family::C4 {
+        return crate::c4::parse(source);
+    }
+    if family == Family::Architecture {
+        return crate::architecture::parse(source);
     }
     if family == Family::Mindmap {
         return crate::mindmap::parse(source);

@@ -2754,7 +2754,7 @@ mod tests {
 
     #[test]
     fn page_find_matches_unsupported_diagram_source() {
-        let mut rig = Harness::new("# Notes\n\n```mermaid\nsankey-beta\n  Reader,Writer,5\n  Reader,Editor,3\n```\n".to_owned());
+        let mut rig = Harness::new("# Notes\n\n```mermaid\nishikawa-beta\n  Reader\n  Reader\n```\n".to_owned());
         rig.frame(1000.0);
         draw_diagrams(&mut rig);
         find_on_page(&mut rig, "reader", 30);

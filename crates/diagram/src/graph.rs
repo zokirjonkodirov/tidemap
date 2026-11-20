@@ -33,20 +33,24 @@ pub enum Family {
     Journey,
     Quadrant,
     Mindmap,
+    GitGraph,
+    Sankey,
+    XyChart,
+    Requirement,
+    C4,
+    Architecture,
+    Block,
+    Packet,
+    Kanban,
+    Radar,
+    Treemap,
     Other,
 }
 
 impl Family {
     /// Whether the engine draws this family.
     pub fn is_drawn(self) -> bool {
-        matches!(self, Family::Flowchart | Family::State | Family::Sequence | Family::Class | Family::Er
-                | Family::Pie
-                | Family::Gantt
-                | Family::Timeline
-                | Family::Journey
-                | Family::Quadrant
-                | Family::Mindmap
-        )
+        self != Family::Other
     }
 }
 

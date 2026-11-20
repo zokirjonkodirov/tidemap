@@ -424,8 +424,14 @@ impl Frame<'_> {
         let zoom = self.view.zoom();
         let col = |tone: Tone| tone_colors(tone, colors);
         match d {
+            Decor::Poly { pts, fill, stroke, alpha } => {
+                let (f, _) = col(*fill);
+                let points: Vec<Pos2> = pts.iter().map(|p| self.view.pt(*p)).collect();
+                let stroke = stroke.map_or(Stroke::NONE, |t| Stroke::new(1.0_f32, color(col(t).1)));
+                self.closed(points, color(f).gamma_multiply(f32::from(*alpha) / 255.0), stroke, None);
+            }
             Decor::Line { pts, width, dashed, tone } => {
-                let (c, _) = col(*tone);
+                let (_, c) = col(*tone);
                 let path: Vec<Pos2> = pts.iter().map(|p| self.view.pt(*p)).collect();
                 if path.len() < 2 {
                     return;

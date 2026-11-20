@@ -361,8 +361,22 @@ fn write_decor(out: &mut String, d: &Decor, style: &StyleSheet, dark: bool, fami
     let colors = style.colors(dark);
     let col = |t: Tone| tone_colors(t, colors);
     match d {
+        Decor::Poly { pts, fill, stroke, alpha } => {
+            let (f, _) = col(*fill);
+            let mut path = String::new();
+            for (i, p) in pts.iter().enumerate() {
+                let _ = write!(path, "{}{} {}", if i == 0 { "M" } else { "L" }, num(p[0]), num(p[1]));
+            }
+            let st = match stroke {
+                Some(t) => format!(" {} stroke-width=\"1\" stroke-linejoin=\"round\"", paint_attr("stroke", col(*t).1)),
+                None => String::new(),
+            };
+            let mut fc = f;
+            fc[3] = ((u16::from(fc[3]) * u16::from(*alpha)) / 255) as u8;
+            let _ = writeln!(out, "<path d=\"{path}Z\" {}{st}/>", paint_attr("fill", fc));
+        }
         Decor::Line { pts, width, dashed, tone } => {
-            let (c, _) = col(*tone);
+            let (_, c) = col(*tone);
             let mut path = String::new();
             for (i, p) in pts.iter().enumerate() {
                 let _ = write!(path, "{}{} {}", if i == 0 { "M" } else { "L" }, num(p[0]), num(p[1]));
