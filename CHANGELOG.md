@@ -4,6 +4,30 @@ All notable changes to Tidemap are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Website** in `site/`: a landing page with a live, clickable copy of the window showing the
+  engine's own output, a guide (install, syntax, shortcuts, `style.json`, export, FAQ), `llms.txt`
+  and `llms-full.txt`, structured data and a sitemap. `tools/site/build.py` regenerates every
+  diagram, screenshot and font from the app; `.github/workflows/pages.yml` publishes it.
+- `Tidemap.exe` carries the app icon and version details, so Explorer and Task Manager show them.
+
+### Changed
+
+- **New mark**: a tide of three elevation layers under a start node and a process node joined by a
+  rounded-head edge, in the accent family. It replaces the terracotta icon of the retired "warm
+  clarity" direction and is drawn by `tools/brand/icon.py`, with a simpler drawing for 48 px and
+  under.
+- The welcome state shows the mark instead of the generic diagram tile.
+
+### Fixed
+
+- `cargo native build` and `package` link again on the GNU toolchain: the rust-mingw
+  `self-contained` folder no longer goes on PATH, where its bare `x86_64-w64-mingw32-gcc` made
+  rustc drop its own crt objects and import libraries.
+
 ## [0.4.0] - 2026-11-20
 
 ### Added
